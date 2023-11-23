@@ -356,13 +356,13 @@ module Core =
           let fre = mkNode net FRE
           link net (Port.mk fre 1) (Port.mk fre 2)
           link net (Port.mk fre 0) port
-      link net host main//(enter net host) root
+      link net host main
     
-    let fromTerm (term : Term) =
+    let build (term : Term) =
       let net = Net.ctor ()
       let root = getRoot net
       inject net (Port.mk root 0) term
-      root
+      net
 
     let indexToName (index : int) =
       let sb = System.Text.StringBuilder ()
@@ -380,117 +380,12 @@ module Core =
         vars.Add (varPort, name)
         name
     
-    type Uniques =
-      { Vec : ResizeArray<int>
-        Set : HashSet<int>
-      }
-    with
-      static member ctor () =
-        { Vec = ResizeArray<int> ()
-          Set = HashSet<int> ()
-        }
-      member this.Add (node : int) =
-        if this.Set.Add node then this.Vec.Add node
-      
-    
-    let rec readTerm net
-      (fres : Uniques)
-      (dups : Uniques)
-      (decs : Uniques)
-      (vars : Dictionary<Port, string>)
-      (seen : HashSet<Port>)
-      (next : Port) =
-      if not (seen.Add next) then
-        Var "..."
-      else
-        let inline go p = readTerm net fres dups decs vars seen p
-        match kind net (Port.address next) with
-        | ROOT -> go (enter net next)
-        | NIL -> Nil
-        | LAM ->
-          match Port.slot next with
-          | 0 ->
-            let x = nameOf vars (Port.mk (Port.address next) 1)
-            let t = enter net (Port.mk (Port.address next) 2)
-            Lam (x, go t)
-          | 1 ->
-            Var (nameOf vars next)
-          | _ -> failwith "Invalid lambda node."
-        | APP ->
-          let f = enter net (Port.mk (Port.address next) 0)
-          let a = enter net (Port.mk (Port.address next) 1)
-          App (go f, go a)
-        | SUP ->
-          let t1 = enter net (Port.mk (Port.address next) 1)
-          let t2 = enter net (Port.mk (Port.address next) 2)
-          Sup (go t1, go t2)
-        | ANN ->
-          let t = enter net (Port.mk (Port.address next) 2)
-          let typ = enter net (Port.mk (Port.address next) 1)
-          Ann (go t, go typ)
-        | CHK ->
-          let t = enter net (Port.mk (Port.address next) 0)
-          let typ = enter net (Port.mk (Port.address next) 1)
-          Chk (go t, go typ)
-        | ARR ->
-          let a = enter net (Port.mk (Port.address next) 1)
-          let b = enter net (Port.mk (Port.address next) 2)
-          Arr (go a, go b)
-        | FRE ->
-          fres.Add (Port.address next)
-          Var (nameOf vars next)
-        | DUP ->
-          dups.Add (Port.address next)
-          Var (nameOf vars next)
-        | DEC ->
-          decs.Add (Port.address next)
-          Var (nameOf vars next)
-
-    let getNonRootNodes (net : Net) =
+    let getNodes (net : Net) =
       let result = ResizeArray<int> ()
       for addr = 1 to net.Nodes.Count / 4 - 1 do
         if not (net.Reuse.Contains addr) then
           result.Add addr
       result
-    
-    let toTerm net (host : Port) =
-      let fres = Uniques.ctor ()
-      let dups = Uniques.ctor ()
-      let decs = Uniques.ctor ()
-      let vars = Dictionary<Port, string> ()
-      let seen = HashSet<Port> ()
-      let inline go port = readTerm net fres dups decs vars seen port
-      let mutable res = go host
-      for dupNode in dups.Vec do
-        let t = go (enter net (Port.mk dupNode 0))
-        let x = nameOf vars (Port.mk dupNode 1)
-        let y = nameOf vars (Port.mk dupNode 2)
-        res <- Dup (x, y, t, res)
-      for decNode in decs.Vec do
-        let t = go (enter net (Port.mk decNode 0))
-        let x = nameOf vars (Port.mk decNode 1)
-        let y = nameOf vars (Port.mk decNode 2)
-        res <- Dec (x, y, t, res)
-      for freNode in fres.Vec do
-        let t = go (enter net (Port.mk freNode 0))
-        res <- Fre (t, res)
-      for KeyValue (port, x) in vars do
-        if not (seen.Add port) then
-          res <- Fre (Var x, res)
-      for nd in getNonRootNodes net do
-        if kind net nd = FRE then
-          let port = enter net (Port.mk nd 0)
-          if not (seen.Contains port) then
-            res <- Fre (go port, res)
-      res
-    
-    let getNodes (net : Net) =
-      let result = ResizeArray<int> ()
-      for addr = 0 to net.Nodes.Count / 4 - 1 do
-        if not (net.Reuse.Contains addr) then
-          result.Add addr
-      result 
-
 
     let exprOfNode net vars node =
       match kind net node with
@@ -588,7 +483,7 @@ module Core =
 
   
     let readback net =
-      let nodes = getNonRootNodes net
+      let nodes = getNodes net
       let fres = ResizeArray<Fre> ()
       let dups = ResizeArray<Dup> ()
       let decs = ResizeArray<Dec> ()
@@ -613,9 +508,5 @@ module Core =
       
   
     let roundtrip (term : Term) =
-      let net = Net.ctor ()
-      inject net (Port.mk (getRoot net) 0) term
-      let res = readback net
-      //let res = toTerm net (enter net (Port.mk (getRoot net) 0))
-      res
+      readback (build term)
   
