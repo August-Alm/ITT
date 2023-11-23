@@ -67,6 +67,7 @@ module Program =
     // loop 1I 1I n
   
   open ITT.Core
+  open ITT.Core.Net
 
   let church2 =
     let bod = App (Var "s1", App (Var "s2", Var "z"))
@@ -77,6 +78,10 @@ module Program =
     Lam ("s", Lam ("z", Dup ("s1", "s2", Var "s", bod)))
 
   let idlam = Lam ("x", Var "x")
+
+  let killer = Fre (Var "x", Lam ("x", Nil))
+
+  let vanishing = Fre (idlam, Nil)
 
   [<EntryPoint>]
   let main _ =
@@ -105,12 +110,17 @@ module Program =
 
     let foo t =
       printfn "before: %s" (t |> show)
-      printfn "after: %s" (t |> Net.roundtrip |> show)
+      printfn "after: %s" (t |> roundtrip |> show)
+      printfn ""
 
     foo idlam
 
     foo church2
 
     foo churc2Alt
+
+    foo killer
+
+    foo vanishing
 
     0
