@@ -6,7 +6,8 @@
   <ItemGroup>
     <Compile Include="Stacks.fs" />
     <Compile Include="Deque.fs" />
-    <Compile Include="InteractionCalculus.fs" />
+    <Compile Include="Nets.fs" />
+    <Compile Include="Terms.fs" />
     <Compile Include="InteractionTypeTheory.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

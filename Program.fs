@@ -66,8 +66,7 @@ module Program =
     //   else loop b (a + b) (n - 1I)
     // loop 1I 1I n
   
-  open ITT.Core
-  open ITT.Core.Net
+  open ITT.Terms
 
   let church2 =
     let bod = App (Var "s1", App (Var "s2", Var "z"))
