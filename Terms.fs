@@ -34,6 +34,7 @@ module Terms =
     | Dup (x, y, t, u) -> $"match {x} ⊗ {y} = {show t}; {show u}"
     | Dec (x, y, t, u) -> $"match {x} → {y} = {show t}; {show u}"
   
+  
 
   [<RequireQualifiedAccess>]
   type Expr =
