@@ -20,19 +20,20 @@ module Terms =
     | Dup of string * string * Term * Term
     | Dec of string * string * Term * Term
   
+  //⇓ ⇒ ← →
   let rec show (trm : Term) =
     match trm with
     | Nil -> "()"
     | Var x -> x
     | Lam (x, t) -> $"λ{x}.{show t}"
     | App (f, a) -> $"({show f} {show a})"
-    | Sup (t1, t2) -> $"({show t1} ⊗ {show t2})"
+    | Sup (t1, t2) -> $"{show t1} ⊗ {show t2})"
     | Ann (t, typ) -> $"({show t} : {show typ})"
-    | Chk (t, typ) -> $"check[{show t}][{show typ}]"
-    | Arr (a, b) -> $"({show a} → {show b})"
-    | Fre (t, u) -> $"free[{show t}]; {show u}"
-    | Dup (x, y, t, u) -> $"match {x} ⊗ {y} = {show t}; {show u}"
-    | Dec (x, y, t, u) -> $"match {x} → {y} = {show t}; {show u}"
+    | Chk (t, typ) -> $"{show t} ⇓ {show typ}"
+    | Arr (a, b) -> $"{show a} ⇒ {show b}"
+    | Fre (t, u) -> $"free {show t}; {show u}"
+    | Dup (x, y, t, u) -> $"{x} ⊗ {y} ← {show t}; {show u}"
+    | Dec (x, y, t, u) -> $"{x} ⇒ {y} ← {show t}; {show u}"
   
   
 
@@ -285,7 +286,7 @@ module Terms =
     | DEC ->
       let x = nameOf vars (Port.mk node 1)
       let y = nameOf vars (Port.mk node 2)
-      Expr.Dec{ Left = x; Right = y; Type = None; Body = None }
+      Expr.Dec { Left = x; Right = y; Type = None; Body = None }
   
   let connect net
     (vars : Dictionary<Port, string>)
