@@ -7,155 +7,82 @@ module Terms =
   open System
 
 
-  type Term =
-    | Nil
-    | Var of string
-    | Lam of string * Term
-    | App of Term * Term
-    | Sup of Term * Term
-    | Ann of Term * Term
-    | Chk of Term * Term
-    | Arr of Term * Term
-    | Fre of Term * Term
-    | Dup of string * string * Term * Term
-    | Dec of string * string * Term * Term
+  [<AbstractClass; AllowNullLiteral>]
+  type Term () = class end
   
+  type Nil () =
+    inherit Term ()
+  
+  type Var (name) =
+    inherit Term ()
+    member val Name : string = name with get, set
+  
+  type Lam (name, body) =
+    inherit Term ()
+    member val Name : string = name with get, set
+    member val Body : Term = body with get, set
+  
+  type App (func, argm) =
+    inherit Term ()
+    member val Func : Term = func with get, set
+    member val Argm : Term = argm with get, set
+  
+  type Sup (left, right) =
+    inherit Term ()
+    member val Left : Term = left with get, set
+    member val Right : Term = right with get, set
+  
+  type Ann (trm, typ) =
+    inherit Term ()
+    member val Term : Term = trm with get, set
+    member val Type : Term = typ with get, set
+
+  type Chk (trm, typ) =
+    inherit Term ()
+    member val Term : Term = trm with get, set
+    member val Type : Term = typ with get, set
+  
+  type Arr (dom, cod) =
+    inherit Term ()
+    member val Domain : Term = dom with get, set
+    member val Codomain : Term = cod with get, set
+  
+  type Fre (trm, bod) =
+    inherit Term ()
+    member val Term : Term = trm with get, set
+    member val Body : Term = bod with get, set
+  
+  type Dup (left, right, trm, bod) =
+    inherit Term ()
+    member val Left : string = left with get, set
+    member val Right : string = right with get, set
+    member val Term : Term = trm with get, set
+    member val Body : Term = bod with get, set
+  
+  type Dec (left, right, typ, bod) =
+    inherit Term ()
+    member val Left : string = left with get, set
+    member val Right : string = right with get, set
+    member val Type : Term = typ with get, set
+    member val Body : Term = bod with get, set
+
+
   //⇓ ⇒ ← →
   let rec show (trm : Term) =
     match trm with
-    | Nil -> "()"
-    | Var x -> x
-    | Lam (x, t) -> $"λ{x}.{show t}"
-    | App (f, a) -> $"({show f} {show a})"
-    | Sup (t1, t2) -> $"{show t1} ⊗ {show t2})"
-    | Ann (t, typ) -> $"({show t} : {show typ})"
-    | Chk (t, typ) -> $"{show t} ⇓ {show typ}"
-    | Arr (a, b) -> $"{show a} ⇒ {show b}"
-    | Fre (t, u) -> $"free {show t}; {show u}"
-    | Dup (x, y, t, u) -> $"{x} ⊗ {y} ← {show t}; {show u}"
-    | Dec (x, y, t, u) -> $"{x} ⇒ {y} ← {show t}; {show u}"
-  
-  
-
-  [<RequireQualifiedAccess>]
-  type Expr =
-    | Nil
-    | Var of Var
-    | Lam of Lam
-    | App of App
-    | Sup of Sup
-    | Ann of Ann
-    | Chk of Chk
-    | Arr of Arr
-    | Fre of Fre
-    | Dup of Dup
-    | Dec of Dec
-  and Var =
-    { mutable Name : string }
-  and Lam =
-    { mutable Name : string
-      mutable Body : Expr option
-    }
-  and App =
-    { mutable Fun : Expr option
-      mutable Arg : Expr option
-    }
-  and Sup =
-    { mutable Left : Expr option
-      mutable Right : Expr option
-    }
-  and Ann =
-    { mutable Term : Expr option
-      mutable Type : Expr option
-    }
-  and Chk =
-    { mutable Term : Expr option
-      mutable Type : Expr option
-    }
-  and Arr =
-    { mutable Domain : Expr option
-      mutable Codomain : Expr option
-    }
-  and Fre =
-    { mutable Term : Expr option
-      mutable Body : Expr option
-    }
-  and Dup =
-    { mutable Left : string
-      mutable Right : string
-      mutable Term : Expr option
-      mutable Body : Expr option
-    }
-  and Dec =
-    { mutable Left : string
-      mutable Right : string
-      mutable Type : Expr option
-      mutable Body : Expr option
-    }
-  
-  let inline nontrivial s = not (String.IsNullOrEmpty s)
-  
-  let rec exprToTerm (expr : Expr) =
-    match expr with
-    | Expr.Nil -> Nil
-    | Expr.Var var ->
-      if nontrivial var.Name then Var var.Name
-      else failwith "variable name is empty"
-    | Expr.Lam lam ->
-      match lam.Body with
-      | Some body -> Lam (lam.Name, exprToTerm body)
-      | None -> failwith "lambda body is missing"
-    | Expr.App app ->
-      match app.Fun, app.Arg with
-      | Some f, Some a -> App (exprToTerm f, exprToTerm a)
-      | None, _ -> failwith "application function is missing"
-      | _, None -> failwith "application argument is missing"
-    | Expr.Sup sup ->
-      match sup.Left, sup.Right with
-      | Some l, Some r -> Sup (exprToTerm l, exprToTerm r)
-      | None, _ -> failwith "superposition left is missing"
-      | _, None -> failwith "superposition right is missing"
-    | Expr.Ann ann ->
-      match ann.Term, ann.Type with
-      | Some t, Some typ -> Ann (exprToTerm t, exprToTerm typ)
-      | None, _ -> failwith "annotation term is missing"
-      | _, None -> failwith "annotaion type is missing"
-    | Expr.Chk chk ->
-      match chk.Term, chk.Type with
-      | Some t, Some typ -> Chk (exprToTerm t, exprToTerm typ)
-      | None, _ -> failwith "check term is missing"
-      | _, None -> failwith "check type is missing"
-    | Expr.Arr arr ->
-      match arr.Domain, arr.Codomain with
-      | Some a, Some b -> Arr (exprToTerm a, exprToTerm b)
-      | None, _ -> failwith "arrow domain is missing"
-      | _, None -> failwith "arrow codomain is missing"
-    | Expr.Fre fre ->
-      match fre.Term, fre.Body with
-      | Some t, Some u -> Fre (exprToTerm t, exprToTerm u)
-      | None, _ -> failwith "free term is missing"
-      | _, None -> failwith "free body is missing" 
-    | Expr.Dup dup ->
-      match dup.Left, dup.Right, dup.Term, dup.Body with
-      | l, r, Some t, Some u ->
-        if nontrivial l then
-          if nontrivial r then
-            Dup (l, r, exprToTerm t, exprToTerm u)
-          else failwith "duplication right name is empty"
-        else failwith "duplication left name is empty"
-      | _, _, None, _ -> failwith "duplication term is missing"
-      | _, _, _, None -> failwith "duplication body is missing"
-    | Expr.Dec dec ->
-      match dec.Left, dec.Right, dec.Type, dec.Body with
-      | l, r, Some typ, Some u ->
-        if nontrivial l then
-          if nontrivial r then
-            Dec (l, r, exprToTerm typ, exprToTerm u)
-          else failwith "decomposition right name is empty"
-        else failwith "decomposition left name is empty"
-      | _, _, None, _ -> failwith "decomposition type is missing"
-      | _, _, _, None -> failwith "decomposition body is missing"
-
+    | null -> failwith "null term"
+    | :? Nil -> "()"
+    | :? Var as var -> var.Name
+    | :? Lam as lam -> $"λ{lam.Name}.{show lam.Body}"
+    | :? App as app -> $"({show app.Func} {show app.Argm})"
+    | :? Sup as sup -> $"{show sup.Left} ⊗ {show sup.Right})"
+    | :? Ann as ann -> $"({show ann.Term} : {show ann.Type})"
+    | :? Chk as chk -> $"{show chk.Term} ⇓ {show chk.Type}"
+    | :? Arr as arr -> $"{show arr.Domain} ⇒ {show arr.Codomain}"
+    | :? Fre as fre -> $"free {show fre.Term}; {show fre.Body}"
+    | :? Dup as dup -> $"{dup.Left} ⊗ {dup.Right} ← {show dup.Term}; {show dup.Body}"
+    | :? Dec as dec -> $"{dec.Left} ⇒ {dec.Right} ← {show dec.Type}; {show dec.Body}"
+    | _ -> failwith "invalid term"
 
   let rec encode net
     (scope : Dictionary<string, Port>)
@@ -164,59 +91,59 @@ module Terms =
     (trm : Term) =
     let inline go u t = encode net scope vars u t
     match trm with
-    | Nil ->
+    | :? Nil ->
       let nil = mkNode net NIL
       link net (Port.mk nil 1) (Port.mk nil 2)
       Port.mk nil 0
-    | Var x ->
-      vars.Add (x, up)
+    | :? Var as trm ->
+      vars.Add (trm.Name, up)
       up
-    | Lam (x, t) ->
+    | :? Lam as trm ->
       let lam = mkNode net LAM
-      scope.Add (x, Port.mk lam 1)
-      link net (Port.mk lam 2) (go (Port.mk lam 2) t)
+      scope.Add (trm.Name, Port.mk lam 1)
+      link net (Port.mk lam 2) (go (Port.mk lam 2) trm.Body)
       Port.mk lam 0
-    | App (f, a) ->
+    | :? App as trm ->
       let app = mkNode net APP
-      link net (Port.mk app 0) (go (Port.mk app 0) f)
-      link net (Port.mk app 1) (go (Port.mk app 1) a)
+      link net (Port.mk app 0) (go (Port.mk app 0) trm.Func)
+      link net (Port.mk app 1) (go (Port.mk app 1) trm.Argm)
       Port.mk app 2
-    | Sup (t1, t2) ->
+    | :? Sup as trm ->
       let sup = mkNode net SUP
-      link net (Port.mk sup 1) (go (Port.mk sup 1) t1)
-      link net (Port.mk sup 2) (go (Port.mk sup 2) t2)
+      link net (Port.mk sup 1) (go (Port.mk sup 1) trm.Left)
+      link net (Port.mk sup 2) (go (Port.mk sup 2) trm.Right)
       Port.mk sup 0
-    | Dup (x, y, t, u) ->
+    | :? Dup as trm ->
       let dup = mkNode net DUP
-      scope.Add (x, Port.mk dup 1)
-      scope.Add (y, Port.mk dup 2)
-      link net (Port.mk dup 0) (go (Port.mk dup 0) t)
-      go up u
-    | Fre (t, u) ->
+      scope.Add (trm.Left, Port.mk dup 1)
+      scope.Add (trm.Right, Port.mk dup 2)
+      link net (Port.mk dup 0) (go (Port.mk dup 0) trm.Term)
+      go up trm.Body
+    | :? Fre as trm ->
       let fre = mkNode net FRE
       link net (Port.mk fre 1) (Port.mk fre 2)
-      link net (Port.mk fre 0) (go (Port.mk fre 0) t)
-      go up u
-    | Dec (x, y, t, u) ->
+      link net (Port.mk fre 0) (go (Port.mk fre 0) trm.Term)
+      go up trm.Body
+    | :? Dec as trm ->
       let dec = mkNode net DEC
-      scope.Add (x, Port.mk dec 1)
-      scope.Add (y, Port.mk dec 2)
-      link net (Port.mk dec 0) (go (Port.mk dec 0) t)
-      go up u
-    | Arr (a, b) ->
+      scope.Add (trm.Left, Port.mk dec 1)
+      scope.Add (trm.Right, Port.mk dec 2)
+      link net (Port.mk dec 0) (go (Port.mk dec 0) trm.Type)
+      go up trm.Body
+    | :? Arr as trm ->
       let arr = mkNode net ARR
-      link net (Port.mk arr 1) (go (Port.mk arr 1) a)
-      link net (Port.mk arr 2) (go (Port.mk arr 2) b)
+      link net (Port.mk arr 1) (go (Port.mk arr 1) trm.Domain)
+      link net (Port.mk arr 2) (go (Port.mk arr 2) trm.Codomain)
       Port.mk arr 0
-    | Ann (t, typ) ->
+    | :? Ann as trm ->
       let ann = mkNode net ANN
-      link net (Port.mk ann 1) (go (Port.mk ann 1) typ)
-      link net (Port.mk ann 2) (go (Port.mk ann 2) t)
+      link net (Port.mk ann 1) (go (Port.mk ann 1) trm.Type)
+      link net (Port.mk ann 2) (go (Port.mk ann 2) trm.Term)
       Port.mk ann 0
-    | Chk (t, typ) ->
+    | :? Chk as trm ->
       let chk = mkNode net CHK
-      link net (Port.mk chk 1) (go (Port.mk chk 1) typ)
-      link net (Port.mk chk 0) (go (Port.mk chk 0) t)
+      link net (Port.mk chk 1) (go (Port.mk chk 1) trm.Type)
+      link net (Port.mk chk 0) (go (Port.mk chk 0) trm.Term)
       Port.mk chk 2
 
   let inject net (host : Port) (term : Term) =
@@ -239,8 +166,7 @@ module Terms =
   
   let build (term : Term) =
     let net = Net.ctor ()
-    let root = getRoot net
-    inject net (Port.mk root 0) term
+    inject net (Port.mk (getRoot net) 0) term
     net
 
   let indexToName (index : int) =
@@ -266,97 +192,86 @@ module Terms =
         result.Add addr
     result
 
-  let exprOfNode net vars node =
+  let termOfNode net vars node =
     match kind net node with
     | ROOT -> failwith "cannot convert root node to expression"
-    | NIL -> Expr.Nil
-    | LAM ->
-      let x = nameOf vars (Port.mk node 1)
-      Expr.Lam { Name = x; Body = None }
-    | APP -> Expr.App { Fun = None; Arg = None }
-    | SUP -> Expr.Sup { Left = None; Right = None }
-    | ANN -> Expr.Ann { Term = None; Type = None }
-    | CHK -> Expr.Chk { Term = None; Type = None }
-    | ARR -> Expr.Arr { Domain = None; Codomain = None }
-    | FRE -> Expr.Fre { Term = None; Body = None }
-    | DUP ->
-      let x = nameOf vars (Port.mk node 1)
-      let y = nameOf vars (Port.mk node 2)
-      Expr.Dup { Left = x; Right = y; Term = None; Body = None }
-    | DEC ->
-      let x = nameOf vars (Port.mk node 1)
-      let y = nameOf vars (Port.mk node 2)
-      Expr.Dec { Left = x; Right = y; Type = None; Body = None }
+    | NIL -> Nil () :> Term
+    | LAM -> Lam (nameOf vars (Port.mk node 1), null)
+    | APP -> App (null, null)
+    | SUP -> Sup (null, null)
+    | ANN -> Ann (null, null)
+    | CHK -> Chk (null, null)
+    | ARR -> Arr (null, null)
+    | FRE -> Fre (null, null)
+    | DUP -> Dup (nameOf vars (Port.mk node 1), nameOf vars (Port.mk node 2), null, null)
+    | DEC -> Dec (nameOf vars (Port.mk node 1), nameOf vars (Port.mk node 2), null, null)
   
   let connect net
     (vars : Dictionary<Port, string>)
-    (exprs : Dictionary<int, Expr>)
+    (terms : Dictionary<int, Term>)
     (fres : ResizeArray<Fre>)
     (dups : ResizeArray<Dup>)
     (decs : ResizeArray<Dec>)
     node =
-    let getExpr port =
+    let getTerm port =
       match vars.TryGetValue port with
-      | true, name -> Some (Expr.Var { Name = name })
-      | false, _ ->
-        match exprs.TryGetValue (Port.address port) with
-        | true, expr -> Some expr
-        | false, _ -> None
+      | true, name -> (Var name) :> Term
+      | false, _ -> terms[Port.address port]
     match kind net node with
     | ROOT -> failwith "cannot connect root node"
     | NIL -> ()
     | LAM ->
-      match exprs.TryGetValue node with
-      | true, Expr.Lam lam ->
-        lam.Body <- getExpr (enter net (Port.mk node 2))
+      match terms[node] with
+      | :? Lam as lam  ->
+        lam.Body <- getTerm (enter net (Port.mk node 2))
       | _ -> failwith "expected lambda node"
     | APP ->
-      match exprs.TryGetValue node with
-      | true, Expr.App app ->
-        app.Fun <- getExpr (enter net (Port.mk node 0))
-        app.Arg <- getExpr (enter net (Port.mk node 1))
+      match terms[node] with
+      | :? App as app ->
+        app.Func <- getTerm (enter net (Port.mk node 0))
+        app.Argm <- getTerm (enter net (Port.mk node 1))
       | _ -> failwith "expected application node"
     | SUP ->
-      match exprs.TryGetValue node with
-      | true, Expr.Sup sup ->
-        sup.Left <- getExpr (enter net (Port.mk node 1))
-        sup.Right <- getExpr (enter net (Port.mk node 2))
+      match terms[node] with
+      | :? Sup as sup ->
+        sup.Left <- getTerm (enter net (Port.mk node 1))
+        sup.Right <- getTerm (enter net (Port.mk node 2))
       | _ -> failwith "expected sup node"
     | ANN ->
-      match exprs.TryGetValue node with
-      | true, Expr.Ann ann ->
-        ann.Term <- getExpr (enter net (Port.mk node 2))
-        ann.Type <- getExpr (enter net (Port.mk node 1))
+      match terms[node] with
+      | :? Ann as ann ->
+        ann.Term <- getTerm (enter net (Port.mk node 2))
+        ann.Type <- getTerm (enter net (Port.mk node 1))
       | _ -> failwith "expected ann node"
     | CHK ->
-      match exprs.TryGetValue node with
-      | true, Expr.Chk chk ->
-        chk.Term <- getExpr (enter net (Port.mk node 0))
-        chk.Type <- getExpr (enter net (Port.mk node 1))
+      match terms[node] with
+      | :? Chk as chk ->
+        chk.Term <- getTerm (enter net (Port.mk node 0))
+        chk.Type <- getTerm (enter net (Port.mk node 1))
       | _ -> failwith "expected chk node"
     | ARR ->
-      match exprs.TryGetValue node with
-      | true, Expr.Arr arr ->
-        arr.Domain <- getExpr (enter net (Port.mk node 1))
-        arr.Codomain <- getExpr (enter net (Port.mk node 2))
+      match terms[node] with
+      | :? Arr as arr ->
+        arr.Domain <- getTerm (enter net (Port.mk node 1))
+        arr.Codomain <- getTerm (enter net (Port.mk node 2))
       | _ -> failwith "expected arr node"
     | FRE ->
-      match exprs.TryGetValue node with
-      | true, Expr.Fre fre ->
-        fre.Term <- getExpr (enter net (Port.mk node 0))
+      match terms[node] with
+      | :? Fre as fre ->
+        fre.Term <- getTerm (enter net (Port.mk node 0))
         fres.Add fre
       | _ -> failwith "expected fre node"
     | DUP ->
-      match exprs.TryGetValue node with
-      | true, Expr.Dup dup ->
-        dup.Term <- getExpr (enter net (Port.mk node 0))
+      match terms[node] with
+      | :? Dup as dup ->
+        dup.Term <- getTerm (enter net (Port.mk node 0))
         dups.Add dup
       | _ -> failwith "expected dup node"
     | DEC ->
-      match exprs.TryGetValue node with
-      | true, Expr.Dec dec ->
-        dec.Type <- getExpr (enter net (Port.mk node 1))
-        dec.Body <- getExpr (enter net (Port.mk node 0))
+      match terms[node] with
+      | :? Dec as dec ->
+        dec.Type <- getTerm (enter net (Port.mk node 1))
+        dec.Body <- getTerm (enter net (Port.mk node 0))
         decs.Add dec
       | _ -> failwith "expected dec node"
   
@@ -366,23 +281,23 @@ module Terms =
     let dups = ResizeArray<Dup> ()
     let decs = ResizeArray<Dec> ()
     let vars = Dictionary<Port, string> ()
-    let exprs = Dictionary<int, Expr> ()
+    let terms = Dictionary<int, Term> ()
     for node in nodes do
-      let expr = exprOfNode net vars node
-      exprs.Add (node, expr)
+      let expr = termOfNode net vars node
+      terms.Add (node, expr)
     for node in nodes do
-      connect net vars exprs fres dups decs node
-    let mutable expr = exprs[getFirst net]
+      connect net vars terms fres dups decs node
+    let mutable term = terms[getFirst net]
     for dup in dups do
-      dup.Body <- Some expr
-      expr <- Expr.Dup dup
+      dup.Body <- term
+      term <- dup
     for dec in decs do
-      dec.Body <- Some expr
-      expr <- Expr.Dec dec
+      dec.Body <- term
+      term <- dec
     for fre in fres do
-      fre.Body <- Some expr
-      expr <- Expr.Fre fre
-    exprToTerm expr
+      fre.Body <- term
+      term <- fre
+    term
   
   let roundtrip (term : Term) =
     readback (build term)

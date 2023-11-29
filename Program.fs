@@ -7,6 +7,19 @@ module Program =
   open System.Collections.Generic
   open System.Diagnostics
 
+  module private Unsafe =
+      let inline cast<'a, 'b> (a : 'a) : 'b =
+  #if !FABLE_COMPILER
+          (# "" a : 'b #)
+  #else
+          unbox<'b> a
+  #endif
+
+  let private boolToInt (b : bool) : int = (# "" b : int #) //int (# "" b : byte #)
+
+  let private boolToIntAlt b = if b then 1 else 0
+
+
   [<Struct>]
   type R = { X : bigint; Y : bigint }
   with
@@ -75,12 +88,15 @@ module Program =
   let churc2Alt =
     let bod = App (Var "s1", App (Var "s2", Var "z"))
     Lam ("s", Lam ("z", Dup ("s1", "s2", Var "s", bod)))
-
+  
   let idlam = Lam ("x", Var "x")
 
-  let killer = Fre (Var "x", Lam ("x", Nil))
+  let killer = Fre (Var "x", Lam ("x", Nil ()))
 
-  let vanishing = Fre (idlam, Nil)
+  let vanishing = Fre (idlam, Nil ())
+
+  let isEven x =
+    boolToInt (x % 2 = 0)
 
   [<EntryPoint>]
   let main _ =
@@ -121,5 +137,12 @@ module Program =
     foo killer
 
     foo vanishing
+
+
+    printfn "Cast 'true' as int: %d" (boolToInt true)
+    printfn "Cast 'false' as int: %d" (boolToInt false)
+
+    for i = 0 to 10 do
+      printfn "%d is even: %d" i (isEven i)
 
     0
