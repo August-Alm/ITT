@@ -537,6 +537,8 @@ namespace ITT
         
         val vanishing: Terms.Fre
         
+        val checker: Terms.Chk
+        
         val isEven: x: int -> int
         
         val main: string array -> int

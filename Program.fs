@@ -246,6 +246,7 @@ module Program =
     // loop 1I 1I n
   
   open ITT.Terms
+  open ITT.Type
 
   let church2 =
     let bod = App (Var "s1", App (Var "s2", Var "z"))
@@ -260,6 +261,8 @@ module Program =
   let killer = Fre (Var "x", Lam ("x", Nil ()))
 
   let vanishing = Fre (idlam, Nil ())
+
+  let checker = Chk (idlam, CArrow (Unit, CUnit))
 
   let isEven x =
     boolToInt (x % 2 = 0)
@@ -327,6 +330,8 @@ module Program =
     foo killer
 
     foo vanishing
+
+    foo checker
 
 
     printfn "Cast 'true' as int: %d" (boolToInt true)
