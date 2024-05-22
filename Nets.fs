@@ -3,7 +3,7 @@ namespace ITT
 module Nets =
 
     open System.Collections.Generic
-    open Deque
+    open Type
 
     type Kind =
       | ROOT
@@ -13,10 +13,8 @@ module Nets =
       | SUP
       | ANN
       | CHK
-      | ARR
       | FRE
       | DUP
-      | DEC
     with
       static member arity (kind : Kind) =
         match kind with
@@ -32,10 +30,8 @@ module Nets =
         | 4 -> SUP
         | 5 -> ANN
         | 6 -> CHK
-        | 7 -> ARR
-        | 8 -> FRE
-        | 9 -> DUP
-        | 10 -> DEC
+        | 7 -> FRE
+        | 8 -> DUP
         | _ -> failwith $"invalid kind: {i}"
       
       static member toInt (kind : Kind) =
@@ -47,10 +43,8 @@ module Nets =
         | SUP -> 4
         | ANN -> 5
         | CHK -> 6
-        | ARR -> 7
-        | FRE -> 8
-        | DUP -> 9
-        | DEC -> 10
+        | FRE -> 7
+        | DUP -> 8
     
 
     type Reuse () =
@@ -74,11 +68,15 @@ module Nets =
 
     
     type Net () =
-      let nodes = ResizeArray<int> 256
+      let nodes = ResizeArray<int> 512
+      let types = ResizeArray<Type> 128
+      let checkables = ResizeArray<Checkable> 128
       let reuse = Reuse ()
       let mutable rewrites = 0
       do nodes.AddRange [| 2; 1; 0; 0 |]
       member _.Nodes = nodes
+      member _.Types = types
+      member _.Checkables = checkables
       member _.Reuse = reuse
       member _.Rewrites with get () = rewrites and set v = rewrites <- v
 
@@ -110,6 +108,26 @@ module Nets =
     let inline kind (net : Net) (node : int) =
       Kind.fromInt (net.Nodes[int <| Port.mk node 3])
     
+    let inline getType (net : Net) (node : int) =
+      if kind net node <> Kind.ANN then
+        failwith "only ANN nodes have a type"
+      net.Types[net.Nodes[int <| Port.mk node 2]]
+    
+    let inline setType (net : Net) (node : int) (typ : Type) =
+      if kind net node <> Kind.ANN then
+        failwith "only ANN nodes have a type"
+      net.Types[net.Nodes[int <| Port.mk node 2]] <- typ
+
+    let inline getCheckable (net : Net) (node : int) =
+      if kind net node <> Kind.CHK then
+        failwith "only CHK nodes have a type"
+      net.Checkables[net.Nodes[int <| Port.mk node 2]]
+
+    let inline setCheckable (net : Net) (node : int) (a : Checkable) =
+      if kind net node <> Kind.CHK then
+        failwith "only CHK nodes have a type"
+      net.Checkables[net.Nodes[int <| Port.mk node 2]] <- a
+
     let inline set (net : Net) (portA : Port) (portB : Port) =
       net.Nodes[int portA] <- int portB
     
@@ -134,6 +152,44 @@ module Nets =
         net.Nodes.Add (Kind.toInt kind)
         addr
     
+    let mkChkNode (net : Net) (a : Checkable) =
+      match net.Reuse.TryPop () with
+      | true, addr -> 
+        set net (Port.mk addr 0) (Port.mk addr 0)
+        set net (Port.mk addr 1) (Port.mk addr 1)
+        setCheckable net addr a
+        net.Nodes[int (Port.mk addr 3)] <- Kind.toInt Kind.CHK
+        addr
+      | false, _ ->
+        let len = net.Nodes.Count
+        net.Nodes.EnsureCapacity (len + 4) |> ignore
+        let addr = len / 4
+        net.Nodes.Add (int (Port.mk addr 0))
+        net.Nodes.Add (int (Port.mk addr 1))
+        net.Nodes.Add (net.Checkables.Count)
+        net.Checkables.Add a
+        net.Nodes.Add (Kind.toInt Kind.CHK)
+        addr
+    
+    let mkAnnNode (net : Net) (typ : Type) =
+      match net.Reuse.TryPop () with
+      | true, addr -> 
+        set net (Port.mk addr 0) (Port.mk addr 0)
+        set net (Port.mk addr 1) (Port.mk addr 1)
+        setType net addr typ
+        net.Nodes[int (Port.mk addr 3)] <- Kind.toInt Kind.ANN
+        addr
+      | false, _ ->
+        let len = net.Nodes.Count
+        net.Nodes.EnsureCapacity (len + 4) |> ignore
+        let addr = len / 4
+        net.Nodes.Add (int (Port.mk addr 0))
+        net.Nodes.Add (int (Port.mk addr 1))
+        net.Nodes.Add (net.Checkables.Count)
+        net.Types.Add typ
+        net.Nodes.Add (Kind.toInt Kind.ANN)
+        addr
+
     let inline freeNode (net : Net) nd =
       net.Reuse.Push nd
 
@@ -154,16 +210,6 @@ module Nets =
         let fre = mkNode net FRE
         link net (enter net (Port.mk nd 1)) (enter net (Port.mk fre 0))
         link net (enter net (Port.mk nd 2)) (enter net (Port.mk nil 0))
-      | DUP | DEC ->
-        let nil1 = mkNode net NIL
-        let nil2 = mkNode net NIL
-        link net (enter net (Port.mk nd 1)) (enter net (Port.mk nil1 0))
-        link net (enter net (Port.mk nd 2)) (enter net (Port.mk nil2 0))
-      | SUP | ARR | ANN ->
-        let fre1 = mkNode net FRE
-        let fre2 = mkNode net FRE
-        link net (enter net (Port.mk nd 1)) (enter net (Port.mk fre1 0))
-        link net (enter net (Port.mk nd 2)) (enter net (Port.mk fre2 0))
 
     let commute net (ndA : int) (ndB : int) =
       let node1, node2, node3, node4 =
@@ -172,20 +218,19 @@ module Nets =
         | DUP, LAM -> mkNode net LAM, mkNode net LAM, mkNode net SUP, mkNode net DUP
         | ARR, DUP -> mkNode net DUP, mkNode net DUP, mkNode net ARR, mkNode net ARR
         | DUP, ARR -> mkNode net ARR, mkNode net ARR, mkNode net DUP, mkNode net DUP
-        | LAM, CHK -> mkNode net ANN, mkNode net CHK, mkNode net DEC, mkNode net LAM
-        | CHK, LAM -> mkNode net DEC, mkNode net LAM, mkNode net ANN, mkNode net CHK
+        //| CHK, LAM -> mkNode net DEC, mkNode net LAM, mkNode net ANN, mkNode net CHK
         | SUP, CHK -> mkNode net CHK, mkNode net CHK, mkNode net DUP, mkNode net SUP
         | CHK, SUP -> mkNode net DUP, mkNode net SUP, mkNode net CHK, mkNode net CHK
-        | ANN, APP -> mkNode net DEC, mkNode net APP, mkNode net CHK, mkNode net ANN
-        | APP, ANN -> mkNode net CHK, mkNode net ANN, mkNode net DEC, mkNode net APP
+        //| ANN, APP -> mkNode net DEC, mkNode net APP, mkNode net CHK, mkNode net ANN
+        //| APP, ANN -> mkNode net CHK, mkNode net ANN, mkNode net DEC, mkNode net APP
         | SUP, APP -> mkNode net APP, mkNode net APP, mkNode net DUP, mkNode net SUP
         | APP, SUP -> mkNode net DUP, mkNode net SUP, mkNode net APP, mkNode net APP
-        | ARR, APP -> mkNode net APP, mkNode net APP, mkNode net DEC, mkNode net ARR
-        | APP, ARR -> mkNode net DEC, mkNode net ARR, mkNode net APP, mkNode net APP
+        //| ARR, APP -> mkNode net APP, mkNode net APP, mkNode net DEC, mkNode net ARR
+        //| APP, ARR -> mkNode net DEC, mkNode net ARR, mkNode net APP, mkNode net APP
         | SUP, DEC -> mkNode net DEC, mkNode net DEC, mkNode net SUP, mkNode net SUP
         | DEC, SUP -> mkNode net SUP, mkNode net SUP, mkNode net DEC, mkNode net DEC
-        | LAM, DEC -> mkNode net ARR, mkNode net DEC, mkNode net LAM, mkNode net LAM
-        | DEC, LAM -> mkNode net LAM, mkNode net LAM, mkNode net ARR, mkNode net DEC
+        //| LAM, DEC -> mkNode net ARR, mkNode net DEC, mkNode net LAM, mkNode net LAM
+        //| DEC, LAM -> mkNode net LAM, mkNode net LAM, mkNode net ARR, mkNode net DEC
         | kindA, kindB -> failwith $"cannot commute {kindA} and {kindB}"
       link net (Port.mk node1 1) (Port.mk node3 1)
       link net (Port.mk node1 2) (Port.mk node4 1)
@@ -201,9 +246,7 @@ module Nets =
       | NIL, _ | FRE, _ -> erase net ndB
       | _, NIL | _, FRE -> erase net ndA
       | LAM, APP | APP, LAM
-      | DUP, SUP | SUP, DUP
-      | ARR, DEC | DEC, ARR
-      | CHK, ANN | ANN, CHK -> annihilate net ndA ndB
+      | DUP, SUP | SUP, DUP -> annihilate net ndA ndB
       | _ -> commute net ndA ndB
       freeNode net ndA
       freeNode net ndB

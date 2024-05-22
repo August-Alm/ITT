@@ -5,6 +5,7 @@ module Terms =
   open Nets
   open System.Collections.Generic
   open System
+  open Type
 
 
   [<AbstractClass; AllowNullLiteral>]
@@ -35,17 +36,12 @@ module Terms =
   type Ann (trm, typ) =
     inherit Term ()
     member val Term : Term = trm with get, set
-    member val Type : Term = typ with get, set
+    member val Type : Type = typ with get, set
 
   type Chk (trm, typ) =
     inherit Term ()
     member val Term : Term = trm with get, set
-    member val Type : Term = typ with get, set
-  
-  type Arr (dom, cod) =
-    inherit Term ()
-    member val Domain : Term = dom with get, set
-    member val Codomain : Term = cod with get, set
+    member val Type : Checkable = typ with get, set
   
   type Fre (trm, bod) =
     inherit Term ()
@@ -58,13 +54,6 @@ module Terms =
     member val Right : string = right with get, set
     member val Term : Term = trm with get, set
     member val Body : Term = bod with get, set
-  
-  type Dec (left, right, typ, bod) =
-    inherit Term ()
-    member val Left : string = left with get, set
-    member val Right : string = right with get, set
-    member val Type : Term = typ with get, set
-    member val Body : Term = bod with get, set
 
 
   //⇓ ⇒ ← →
@@ -76,12 +65,10 @@ module Terms =
     | :? Lam as lam -> $"λ{lam.Name}.{show lam.Body}"
     | :? App as app -> $"({show app.Func} {show app.Argm})"
     | :? Sup as sup -> $"{show sup.Left} ⊗ {show sup.Right})"
-    | :? Ann as ann -> $"({show ann.Term} : {show ann.Type})"
-    | :? Chk as chk -> $"{show chk.Term} ⇓ {show chk.Type}"
-    | :? Arr as arr -> $"{show arr.Domain} ⇒ {show arr.Codomain}"
+    | :? Ann as ann -> $"({show ann.Term} : {Type.show ann.Type})"
+    | :? Chk as chk -> $"{show chk.Term} ⇓ {Checkable.show chk.Type}"
     | :? Fre as fre -> $"free {show fre.Term}; {show fre.Body}"
     | :? Dup as dup -> $"{dup.Left} ⊗ {dup.Right} ← {show dup.Term}; {show dup.Body}"
-    | :? Dec as dec -> $"{dec.Left} ⇒ {dec.Right} ← {show dec.Type}; {show dec.Body}"
     | _ -> failwith "invalid term"
 
   let rec encode net
@@ -124,25 +111,12 @@ module Terms =
       link net (Port.mk fre 1) (Port.mk fre 2)
       link net (Port.mk fre 0) (go (Port.mk fre 0) trm.Term)
       go up trm.Body
-    | :? Dec as trm ->
-      let dec = mkNode net DEC
-      scope.Add (trm.Left, Port.mk dec 1)
-      scope.Add (trm.Right, Port.mk dec 2)
-      link net (Port.mk dec 0) (go (Port.mk dec 0) trm.Type)
-      go up trm.Body
-    | :? Arr as trm ->
-      let arr = mkNode net ARR
-      link net (Port.mk arr 1) (go (Port.mk arr 1) trm.Domain)
-      link net (Port.mk arr 2) (go (Port.mk arr 2) trm.Codomain)
-      Port.mk arr 0
     | :? Ann as trm ->
-      let ann = mkNode net ANN
-      link net (Port.mk ann 1) (go (Port.mk ann 1) trm.Type)
+      let ann = mkAnnNode net trm.Type
       link net (Port.mk ann 2) (go (Port.mk ann 2) trm.Term)
       Port.mk ann 0
     | :? Chk as trm ->
-      let chk = mkNode net CHK
-      link net (Port.mk chk 1) (go (Port.mk chk 1) trm.Type)
+      let chk = mkChkNode net trm.Type
       link net (Port.mk chk 0) (go (Port.mk chk 0) trm.Term)
       Port.mk chk 2
 
@@ -199,25 +173,19 @@ module Terms =
     | LAM -> Lam (nameOf vars (Port.mk node 1), null)
     | APP -> App (null, null)
     | SUP -> Sup (null, null)
-    | ANN -> Ann (null, null)
-    | CHK -> Chk (null, null)
-    | ARR -> Arr (null, null)
+    | ANN -> Ann (null, Unit)
+    | CHK -> Chk (null, CUnit)
     | FRE -> Fre (null, null)
     | DUP -> 
       let x = nameOf vars (Port.mk node 1)
       let y = nameOf vars (Port.mk node 2)
       Dup (x, y, null, null)
-    | DEC ->
-      let x = nameOf vars (Port.mk node 1)
-      let y = nameOf vars (Port.mk node 2)
-      Dec (x, y, null, null)
   
   let connect net
     (vars : Dictionary<Port, string>)
     (trms : Dictionary<int, Term>)
     (fres : ResizeArray<Fre>)
     (dups : ResizeArray<Dup>)
-    (decs : ResizeArray<Dec>)
     node =
     let getTerm slot =
       let port = enter net (Port.mk node slot)
@@ -240,16 +208,12 @@ module Terms =
       sup.Right <- getTerm 2
     | ANN ->
       let ann = trms[node] :?> Ann
-      ann.Term <- getTerm 2
-      ann.Type <- getTerm 1
+      ann.Term <- getTerm 1
+      ann.Type <- getType net node
     | CHK ->
       let chk = trms[node] :?> Chk
       chk.Term <- getTerm 0
-      chk.Type <- getTerm 1
-    | ARR ->
-      let arr = trms[node] :?> Arr
-      arr.Domain <- getTerm 1
-      arr.Codomain <- getTerm 2
+      chk.Type <- getCheckable net node
     | FRE ->
       let fre = trms[node] :?> Fre
       fre.Term <- getTerm 0
@@ -258,31 +222,22 @@ module Terms =
       let dup = trms[node] :?> Dup
       dup.Term <- getTerm 0
       dups.Add dup
-    | DEC ->
-      let dec = trms[node] :?> Dec
-      dec.Type <- getTerm 1
-      dec.Body <- getTerm 0
-      decs.Add dec
   
   let readback net =
     let nodes = getNodes net
     let fres = ResizeArray<Fre> ()
     let dups = ResizeArray<Dup> ()
-    let decs = ResizeArray<Dec> ()
     let vars = Dictionary<Port, string> ()
     let trms = Dictionary<int, Term> ()
     for node in nodes do
       let trm = termOfNode net vars node
       trms.Add (node, trm)
     for node in nodes do
-      connect net vars trms fres dups decs node
+      connect net vars trms fres dups node
     let mutable res = trms[getFirst net]
     for dup in dups do
       dup.Body <- res
       res <- dup
-    for dec in decs do
-      dec.Body <- res
-      res <- dec
     for fre in fres do
       fre.Body <- res
       res <- fre

@@ -3,6 +3,7 @@ namespace ITT
 module Terms =
 
   open Nets
+  open Type
 
 
   [<AbstractClass>]
@@ -38,20 +39,14 @@ module Terms =
   type Ann =
     inherit Term
     member Term : Term
-    member Type : Term
-    new : Term * Term -> Ann
+    member Type : Type
+    new : Term * Type -> Ann
   
   type Chk =
     inherit Term
     member Term : Term
-    member Type : Term
-    new : Term * Term -> Chk
-  
-  type Arr =
-    inherit Term
-    member Domain : Term
-    member Codomain : Term
-    new : Term * Term -> Arr
+    member Type : Checkable
+    new : Term * Checkable -> Chk
   
   type Fre =
     inherit Term
@@ -67,14 +62,6 @@ module Terms =
     member Body : Term
     new : string * string * Term * Term -> Dup
   
-  type Dec =
-    inherit Term
-    member Left : string
-    member Right : string
-    member Type : Term
-    member Body : Term
-    new : string * string * Term * Term -> Dec
-
 
   val show : Term -> string
 

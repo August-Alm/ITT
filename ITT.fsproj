@@ -5,6 +5,7 @@
     <OtherFlags>--sig:test.fsi</OtherFlags>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Type.fs" />
     <Compile Include="Stacks.fs" />
     <Compile Include="Deque.fs" />
     <Compile Include="Nets.fs" />

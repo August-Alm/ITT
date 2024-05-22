@@ -4,6 +4,39 @@ namespace FSharp
 
 namespace ITT
     
+    module Type =
+        
+        type Type =
+            | Unit
+            | Tuple of Type * Type
+            | Arrow of Type * Type
+            | Box of Type
+        
+        type Checkable =
+            | CUnit
+            | CTuple of Checkable * Checkable
+            | CArrow of Type * Checkable
+        
+        [<RequireQualifiedAccess>]
+        module Type =
+            
+            val reduce: typ: Type -> Type
+            
+            val show: typ: Type -> string
+            
+            val isSubtype: typ1: Type -> typ2: Type -> bool
+        
+        [<RequireQualifiedAccess>]
+        module Checkable =
+            
+            val toType: a: Checkable -> Type
+            
+            val show: (Checkable -> string)
+            
+            val isSubtype: typ: Type -> a: Checkable -> bool
+
+namespace ITT
+    
     module Stacks =
         
         [<Struct>]
@@ -81,10 +114,8 @@ namespace ITT
             | SUP
             | ANN
             | CHK
-            | ARR
             | FRE
             | DUP
-            | DEC
             
             static member arity: kind: Kind -> int
             
@@ -106,11 +137,15 @@ namespace ITT
             
             new: unit -> Net
             
+            member Checkables: ResizeArray<Type.Checkable>
+            
             member Nodes: ResizeArray<int>
             
             member Reuse: Reuse
             
             member Rewrites: int with get, set
+            
+            member Types: ResizeArray<Type.Type>
         
         [<Measure>]
         type uomPort
@@ -134,11 +169,24 @@ namespace ITT
         
         val inline kind: net: Net -> node: int -> Kind
         
+        val inline getType: net: Net -> node: int -> Type.Type
+        
+        val inline setType: net: Net -> node: int -> typ: Type.Type -> unit
+        
+        val inline getCheckable: net: Net -> node: int -> Type.Checkable
+        
+        val inline setCheckable:
+          net: Net -> node: int -> a: Type.Checkable -> unit
+        
         val inline set: net: Net -> portA: Port -> portB: Port -> unit
         
         val inline link: net: Net -> portA: Port -> portB: Port -> unit
         
         val mkNode: net: Net -> kind: Kind -> int
+        
+        val mkChkNode: net: Net -> a: Type.Checkable -> int
+        
+        val mkAnnNode: net: Net -> typ: Type.Type -> int
         
         val inline freeNode: net: Net -> nd: int -> unit
         
@@ -201,29 +249,20 @@ namespace ITT
         type Ann =
             inherit Term
             
-            new: trm: Term * typ: Term -> Ann
+            new: trm: Term * typ: Type.Type -> Ann
             
             member Term: Term with get, set
             
-            member Type: Term with get, set
+            member Type: Type.Type with get, set
         
         type Chk =
             inherit Term
             
-            new: trm: Term * typ: Term -> Chk
+            new: trm: Term * typ: Type.Checkable -> Chk
             
             member Term: Term with get, set
             
-            member Type: Term with get, set
-        
-        type Arr =
-            inherit Term
-            
-            new: dom: Term * cod: Term -> Arr
-            
-            member Codomain: Term with get, set
-            
-            member Domain: Term with get, set
+            member Type: Type.Checkable with get, set
         
         type Fre =
             inherit Term
@@ -246,19 +285,6 @@ namespace ITT
             member Right: string with get, set
             
             member Term: Term with get, set
-        
-        type Dec =
-            inherit Term
-            
-            new: left: string * right: string * typ: Term * bod: Term -> Dec
-            
-            member Body: Term with get, set
-            
-            member Left: string with get, set
-            
-            member Right: string with get, set
-            
-            member Type: Term with get, set
         
         val show: trm: Term -> string
         
@@ -290,8 +316,7 @@ namespace ITT
             vars: System.Collections.Generic.Dictionary<Nets.Port,string> ->
             trms: System.Collections.Generic.Dictionary<int,Term> ->
             fres: ResizeArray<Fre> ->
-            dups: ResizeArray<Dup> ->
-            decs: ResizeArray<Dec> -> node: int -> unit
+            dups: ResizeArray<Dup> -> node: int -> unit
         
         val readback: net: Nets.Net -> Term
         
