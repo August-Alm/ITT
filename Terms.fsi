@@ -4,7 +4,7 @@ module Terms =
 
   open Nets
 
-  
+
   [<AbstractClass>]
   type Term = class end
   

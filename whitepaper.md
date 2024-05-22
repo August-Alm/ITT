@@ -47,101 +47,191 @@ C[free [s, t]; u] ~> C[free s; free t; u]
 C[(() t)] ~> C[free t; ()]
 C[[x, y] <- (); t] ~> C[t]{x = (), y = ()}
 ```
-We call all the closure of the ~> reduction rules and the alpha equivalences _beta-reduction_ and the equivalence it imposes, beta-equivalence.
+We call the closure of the ~> reduction rules and the alpha equivalences _beta-reduction_ and the equivalence it imposes, beta-equivalence.
 
 _Remark 1_
-The most attractive property of the SIC is that all the beta reduction rules can easily be implemented as constant time operations. In fact, the calculus has a direct encoding as interaction nets (where the reduction steps are not just constant time, but naturally parallelizable).
+The most attractive property of the SIC is that all the beta reduction rules can easily be implemented as constant time operations. In fact, the calculus has a direct encoding as interaction nets (where the reduction steps are not just constant time, but confluent and naturally parallelizable).
 
 _Remark 2_
 It is possible to add notions of eta-equivalence, similar to how it is done in lambda calculus.
 
-__Type-extended SIC__
+__Simply typed SIC__
 
-Let's extend the SIC grammar as follows:
+Define a grammar of types by
+```
+S, T ::= Unit | S => T | S * T | !T
+```
+with ! (the "bang", "box" or "exponential") binding tighter than the binary constructors. We shall in what follows tacitly assume that the exponential is idempotent, !! = !, and that !(A * B) = !A * !B.
+Also, introduce a subsumption (subtyping) relation S < T by
+```
+T < T,  !T < T, S * T < S' T' iff S < S' && T < T',
+and S => T < S' => T' iff S' < S && T < S,
+```
+Define a _checkable type__ to be a type that is not boxed (recall, !(S * T) = !S * !T) and also is not an arrow type returning a boxed type. (So, inductively, a type is checkable if it is not boxed or if it is an arrow type returning a checkable type). We will let A, B, C, .. range over checkable types.
+
+Now, let's extend the SIC grammar as follows:
 ```
 t, u ::= ...
-       | t => u             arrow
-       | x => y <- t; u     deconstruct
-       | t : u              annotation
-       | check t u          type-check
+       | t : T              annotation
+       | check A t          type-check
        | exn                exception
 ```
-Extend alpha-equivalence in the obvious way. We also add new beta reduction rules. The foremost are:
+Note that annotations can use any type, by type-check only checkable types. Extend alpha-equivalence in the obvious way. We also add new beta reduction rules. The foremost are:
 ```
-C[x => y <- s => t; u] ~>     deconstructing arrow
-    C[u]{x = s, y = t}
+C[check A \x.t] ~>            checking abstraction
+    if A = T => B then
+        C[\x.check B t]{x = x : T}
+    else exn
 
-C[check \x.t u] ~>            checking abstraction
-    C[a => b <- u; \x.check t b]{x = x : a}
+C[check C [s, t]] ~>          checking superposition
+    if C = A * B then
+        C[[check A s, check B t]]
+    else exn
 
-C[check [s, t] u] ~>          checking superposition
-    C[[a, b] <- u; [check s a, check t b]]
+C[(s : T u)] ~>               applying annotation
+    if T = A => S or
+    if T = !(A => S) then
+        C[(s check A u) : S]
+    else exn
 
-C[(s : t u)] ~>               applying annotation
-    C[a => b <- t; (s check u a) : b]
-
-C[check s : t u] ~>           checking annotation
-    if t ~ u then free t; free u; s else exn
+C[check A (t : T)] ~>           checking annotation
+    if A < T then t
+    else exn
 ```
-These reduction steps mimic the steps of a type-checking algorithm! The equivalence relation ~ in the last rule is beta equivalence, but theoretically we could imagine using some other relation. See the remark at the end of this section, regarding how to precisely work with it. For consistency, we also add the more exotic
+These reduction steps mimic the steps of a type-checking algorithm! The key rule for how the
+exponential is brought into play is the following rule:
 ```
-C[check s => t u] ~>          checking arrow
-    C[a => b <- u; (check s a) => (check t b)]
+C[[x, y] <- s : U; t] ~>      duplicating annotation
+    if U = S * T then
+        C[[s1, s2] <- s; t]{x = s1 : S, y = s2 : T}
+    elif U = !T then
+        C[[s1, s2] <- s; t]{x = s1 : !T, y = s2 : !T}
+    else exn
 ```
-and
-```
-C[[x, y] <- s => t; u] ~>     duplicating arrow
-    C[[s1, s2] <- s; [t1, t2] <- t; u]{x = s1 => t1, y = s2 => t2}
+Informally, only terms of superposed or exponential type can be duplicated.
+Lastly, there are some obvious new garbage rules. The new exception term should essentially behave just like the nil term but we leave it unspecified as it is intended to be an implementation detail.
 
-C[[x, y] <- s : t; u] ~>      duplicating annotation
-    C[[s1, s2] <- s; [t1, t2] <- t; u]{x = s1 : t1, y = s2 : t2}
-```
-as well as a bunch of obvious garbage rules. The new exception term should essentially behave just like the nil term but we leave it unspecified as it is intended to be an implementation detail.
+__Examples__
 
-_Remark_ There ought to be efficient ways to check beta equivalence without doing reduction to beta-normal form, using an interaction net encoding and the work by Mazza and LaFont, comparing "execution paths" in the manner of "geometry of interaction"; see Mazza's paper "Observational equivalence and full abstraction in the symmetric interaction combinators". We have not worked out the details.
+The garbage rule (left implicit above)
+```
+check nil A ~> nil
+```
+says that nil checks agains any checkable type (so we should maybe call it "bottom").
+
+The identity abstraction checks against any type A => A:
+```
+check \x.x (A => A) ~>
+\x.check (x : A) A ~>
+\x.x
+```
+Note that it also checks against any A => B, where A < B is a subtype, e.g. A = !B.
+
+Consider the following incarnation of the Church numeral "two":
+```
+two = [s1, s2] <- s; \s.\z.(s1 (s2 z))
+``` 
+Using the "checking abstraction" rule
+```
+check two !(A => A) => A => A ~>
+[s1, s2] <- s : !(A => A);
+\s.check \z.(s1 (s2 z)) A => A.
+```
+Then using the "duplicating annotation" rule once and again the "checking abstraction":
+```
+[s1, s2] <- s;
+\s.\z.check (s1 : !E (s2 : !E z : A)) A
+```
+with E = A => A. Using the rule "applying annotation" on the inmost application:
+```
+(s2 : !(A => A) z : A) ~>
+(s2 check A (z: A)) : A ~>
+(s2 z) : A
+```
+So we then have
+```
+[s1, s2] <- s;
+\s.\z.check (s1 : !E (s2 z) : A) A,
+```
+which after another application of the "applying annotation" rule reduces to
+```
+[s1, s2] <- s;
+\s.\z.check ((s1 (s2 z)) : A) A ~>
+two.
+```
+Note that if the type instead was (A => A) => A => A, i.e., without the exponential, then the reduction would have yielded an exception term in the "duplicating annotation" step.
 
 __As a more traditional type theory__
 
-As usual, let's say that a _typing context_ is a list of type annotations of variables. Given such a context, one can in the type-extended SIC discussed above define the substitution
+As usual, let's say that a _typing context_ is a list of type annotations of variables. Given such a context, one can in the simply typed SIC discussed above define the substitution
 ```
 t{ctx} := t{x1 = x1 : a1, ..., xN = xN : aN},
 ```
-replacing all variables by their annotated versions. With this notation fixed, we can define the meaning of typing judgements:
+replacing all variables by their annotated versions. With this notation fixed, we can define the meaning of typing judgements. For checkable types:
 ```
-(check t u){ctx} ~ t
+(check A t){ctx} ~ t
+--------------------      (~ means beta equivalence)
+ctx |- t : A
+```
+Using that definition, we define typing with boxed types as:
+```
+ctx |- t : A    ctx |- [t', t''] <- t; free t''; t' : A
+-------------------------------------------------------    box typing
+ctx |- t : !A
+```
+Informally, a term t has type !A if it has type A and duplicates to terms that also have type A.
+
+Now, note that
+```
+(check S => A \x.t){ctx} ~>
+(\x.check A t){ctx, x : S} ~ \x.t
+iff (check A t){ctx, x : S} ~ t.
+```
+It follows that for a checkable type A, we can equivalently define
+```
+ctx |- \x.t : S => A
+```
+by the traditional derivation
+```
+ctx, x : S |- t : A
 --------------------
-ctx |- t : u
+ctx |- \x.t : S => A
 ```
-Here, we can restrict "t" to be a term of the usual SIC, and "u" to be a term of some restricted subgrammar corresponding to types (e.g., not itself involving any type-check constructors).
+This latter then generalizes, so we can define typing also of arrows in general (also with non-checkable return types) by:
+```
+ctx, x : S |- t : T
+--------------------
+ctx |- \x.t : S => T
+```
 
-_Remark_
-Is this sensible? I think it is pretty well-defined at least.
+__Lemma.__ The derivation
+```
+ctx |- s : S => T      ctx |- t : S
+-----------------------------------
+ctx |- (s t) : T
+```
+is always valid.
 
-__Examples and questions__
+__Proof.__ (Sketch.) We may assume s = \x.u. We know, from ctx |- s : S => T, that ctx |- (u{x = x : S}) : T, which means (check u{x = x : S} T){ctx} is beta-equivalent to u{ctx}. The reduction of this check-expression must at some point involve steps
+```
+check S'' (x' : S') ~> x'       (whence S'' < S')
+```
+with x' a duplicate of x, because the annotations have to dissappear for otherwise the reduction could not possibly be equivalent to u{ctx} (which has no annotated x). The beta-reduction steps are confluent, so we can follow an analogous sequence of reduction steps when reducing (\x.u t) and reach steps with subexpressions
+```
+check S'' t'
+```
+where now t' is a corresponding duplicate of t. We must argue that these check-expressions can all be resolved, i.e., that
+```
+check S'' t' ~ t'
+```
+There are four cases to consider:
 
-The identity abstraction has nil type:
-```
-check \x.x () ~>
-s => t <- (); \x.check (x : s) t ~>
-\x.check (x : ()) () ~>
-free (); free (); \x.x ~>
-\x.x
-```
-Also,
-check \x.x (a => a) ~>
-s => t <- (a => a); \x.check (x : s) t ~>
-\x.check (x : a) a ~>
-free a; free a; \x.x ~>
-\x.x
-assuming a can be fully freed. (Should ~ always discard "free terms"?)
-On the other hand,
-```
-[a1, a2] <- a; check \x.x (a1 => a2) ~>
-[a1, a2] <- a; t1 => t2 <- (a1 => a2); \x.check (x : t1) t2 ~>
-[a1, a2] <- a; \x.check (x : a1) a2
-```
-If a = [b, b], then it checks out. If a = \t.t, then
-```
-[a1, a2] <- \t.t; u ~> u{a1 = \t1.t1, a2 = \t2.t2}
-```
-and it also checks out. The lesson here seems to be that there are no polymorphic identity arrow types a => a because the language of types is linear; the best we have is [a1, a2] <- a; (a1 => a2) -- which is an identity arrow type only when the type a can be truly duplicated.
+1. No duplication: \x.u is linear in x. In this case x' = x and t' = t, and S' = S. Then check S'' t will be equivalent to t (because we're assuming ctx |- t : S).
+
+2. Exponential duplication: \x.u is nonlinear and S = !A. In this case we also have S' = S = !A (because of the "duplicating annotation" rule). Because of the box typing rule, we moreover know that ctx |- t' : !A, which means that check S'' t' will reduce to t'.
+
+3. Pair duplication: \x.u duplicates x and S = A * B. In this case S' is either A or B. We may assume that t = [t1, t2], so that t' is either t1 or t2, with corresponding type either A or B. Again check S'' t' ~ t.
+
+4. Exponentials and pairs: \x.u is nonlinear and S is a combination of exponential and tuple types. This reduces to a combination of cases (2) and (3).
+
+QED.

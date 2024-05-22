@@ -56,7 +56,7 @@ module Nets =
     type Reuse () =
       let stack = Stack<int> ()
       let set = HashSet<int> ()
-    with
+
       member _.Push (node : int) =
         if set.Add node then
           stack.Push node
@@ -73,19 +73,14 @@ module Nets =
         set.Contains node
 
     
-    type Net =
-      { Nodes : ResizeArray<int>
-        Reuse : Reuse
-        mutable Rewrites : int
-      }
-    with
-      static member ctor () =
-        let nodes = ResizeArray<int> 256
-        nodes.AddRange [| 2; 1; 0; 0 |]
-        { Nodes = nodes
-          Reuse = Reuse ()
-          Rewrites = 0
-        }
+    type Net () =
+      let nodes = ResizeArray<int> 256
+      let reuse = Reuse ()
+      let mutable rewrites = 0
+      do nodes.AddRange [| 2; 1; 0; 0 |]
+      member _.Nodes = nodes
+      member _.Reuse = reuse
+      member _.Rewrites with get () = rewrites and set v = rewrites <- v
 
 
     [<Measure>]
@@ -139,7 +134,7 @@ module Nets =
         net.Nodes.Add (Kind.toInt kind)
         addr
     
-    let inline freeNode net nd =
+    let inline freeNode (net : Net) nd =
       net.Reuse.Push nd
 
     let annihilate (net : Net) (ndA : int) (ndB : int) =

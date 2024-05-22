@@ -165,7 +165,7 @@ module Terms =
     link net host main
   
   let build (term : Term) =
-    let net = Net.ctor ()
+    let net = Net ()
     inject net (Port.mk (getRoot net) 0) term
     net
 
@@ -203,77 +203,66 @@ module Terms =
     | CHK -> Chk (null, null)
     | ARR -> Arr (null, null)
     | FRE -> Fre (null, null)
-    | DUP -> Dup (nameOf vars (Port.mk node 1), nameOf vars (Port.mk node 2), null, null)
-    | DEC -> Dec (nameOf vars (Port.mk node 1), nameOf vars (Port.mk node 2), null, null)
+    | DUP -> 
+      let x = nameOf vars (Port.mk node 1)
+      let y = nameOf vars (Port.mk node 2)
+      Dup (x, y, null, null)
+    | DEC ->
+      let x = nameOf vars (Port.mk node 1)
+      let y = nameOf vars (Port.mk node 2)
+      Dec (x, y, null, null)
   
   let connect net
     (vars : Dictionary<Port, string>)
-    (terms : Dictionary<int, Term>)
+    (trms : Dictionary<int, Term>)
     (fres : ResizeArray<Fre>)
     (dups : ResizeArray<Dup>)
     (decs : ResizeArray<Dec>)
     node =
-    let getTerm port =
+    let getTerm slot =
+      let port = enter net (Port.mk node slot)
       match vars.TryGetValue port with
       | true, name -> (Var name) :> Term
-      | false, _ -> terms[Port.address port]
+      | false, _ -> trms[Port.address port]
     match kind net node with
     | ROOT -> failwith "cannot connect root node"
     | NIL -> ()
     | LAM ->
-      match terms[node] with
-      | :? Lam as lam  ->
-        lam.Body <- getTerm (enter net (Port.mk node 2))
-      | _ -> failwith "expected lambda node"
+      let lam = trms[node] :?> Lam
+      lam.Body <- getTerm 2
     | APP ->
-      match terms[node] with
-      | :? App as app ->
-        app.Func <- getTerm (enter net (Port.mk node 0))
-        app.Argm <- getTerm (enter net (Port.mk node 1))
-      | _ -> failwith "expected application node"
+      let app = trms[node] :?> App
+      app.Func <- getTerm 0
+      app.Argm <- getTerm 1
     | SUP ->
-      match terms[node] with
-      | :? Sup as sup ->
-        sup.Left <- getTerm (enter net (Port.mk node 1))
-        sup.Right <- getTerm (enter net (Port.mk node 2))
-      | _ -> failwith "expected sup node"
+      let sup = trms[node] :?> Sup
+      sup.Left <- getTerm 1
+      sup.Right <- getTerm 2
     | ANN ->
-      match terms[node] with
-      | :? Ann as ann ->
-        ann.Term <- getTerm (enter net (Port.mk node 2))
-        ann.Type <- getTerm (enter net (Port.mk node 1))
-      | _ -> failwith "expected ann node"
+      let ann = trms[node] :?> Ann
+      ann.Term <- getTerm 2
+      ann.Type <- getTerm 1
     | CHK ->
-      match terms[node] with
-      | :? Chk as chk ->
-        chk.Term <- getTerm (enter net (Port.mk node 0))
-        chk.Type <- getTerm (enter net (Port.mk node 1))
-      | _ -> failwith "expected chk node"
+      let chk = trms[node] :?> Chk
+      chk.Term <- getTerm 0
+      chk.Type <- getTerm 1
     | ARR ->
-      match terms[node] with
-      | :? Arr as arr ->
-        arr.Domain <- getTerm (enter net (Port.mk node 1))
-        arr.Codomain <- getTerm (enter net (Port.mk node 2))
-      | _ -> failwith "expected arr node"
+      let arr = trms[node] :?> Arr
+      arr.Domain <- getTerm 1
+      arr.Codomain <- getTerm 2
     | FRE ->
-      match terms[node] with
-      | :? Fre as fre ->
-        fre.Term <- getTerm (enter net (Port.mk node 0))
-        fres.Add fre
-      | _ -> failwith "expected fre node"
+      let fre = trms[node] :?> Fre
+      fre.Term <- getTerm 0
+      fres.Add fre
     | DUP ->
-      match terms[node] with
-      | :? Dup as dup ->
-        dup.Term <- getTerm (enter net (Port.mk node 0))
-        dups.Add dup
-      | _ -> failwith "expected dup node"
+      let dup = trms[node] :?> Dup
+      dup.Term <- getTerm 0
+      dups.Add dup
     | DEC ->
-      match terms[node] with
-      | :? Dec as dec ->
-        dec.Type <- getTerm (enter net (Port.mk node 1))
-        dec.Body <- getTerm (enter net (Port.mk node 0))
-        decs.Add dec
-      | _ -> failwith "expected dec node"
+      let dec = trms[node] :?> Dec
+      dec.Type <- getTerm 1
+      dec.Body <- getTerm 0
+      decs.Add dec
   
   let readback net =
     let nodes = getNodes net
@@ -281,23 +270,23 @@ module Terms =
     let dups = ResizeArray<Dup> ()
     let decs = ResizeArray<Dec> ()
     let vars = Dictionary<Port, string> ()
-    let terms = Dictionary<int, Term> ()
+    let trms = Dictionary<int, Term> ()
     for node in nodes do
-      let expr = termOfNode net vars node
-      terms.Add (node, expr)
+      let trm = termOfNode net vars node
+      trms.Add (node, trm)
     for node in nodes do
-      connect net vars terms fres dups decs node
-    let mutable term = terms[getFirst net]
+      connect net vars trms fres dups decs node
+    let mutable res = trms[getFirst net]
     for dup in dups do
-      dup.Body <- term
-      term <- dup
+      dup.Body <- res
+      res <- dup
     for dec in decs do
-      dec.Body <- term
-      term <- dec
+      dec.Body <- res
+      res <- dec
     for fre in fres do
-      fre.Body <- term
-      term <- fre
-    term
+      fre.Body <- res
+      res <- fre
+    res
   
   let roundtrip (term : Term) =
     readback (build term)
