@@ -2,8 +2,8 @@ namespace ITT
 
 module Nets =
 
-
     open System.Collections.Generic
+    open Deque
 
     type Kind =
       | ROOT
@@ -52,10 +52,11 @@ module Nets =
         | DUP -> 9
         | DEC -> 10
     
+
     type Reuse () =
       let stack = Stack<int> ()
       let set = HashSet<int> ()
-    with
+
       member _.Push (node : int) =
         if set.Add node then
           stack.Push node
@@ -72,19 +73,14 @@ module Nets =
         set.Contains node
 
     
-    type Net =
-      { Nodes : ResizeArray<int>
-        Reuse : Reuse
-        mutable Rewrites : int
-      }
-    with
-      static member ctor () =
-        let nodes = ResizeArray<int> 256
-        nodes.AddRange [| 2; 1; 0; 0 |]
-        { Nodes = nodes
-          Reuse = Reuse ()
-          Rewrites = 0
-        }
+    type Net () =
+      let nodes = ResizeArray<int> 256
+      let reuse = Reuse ()
+      let mutable rewrites = 0
+      do nodes.AddRange [| 2; 1; 0; 0 |]
+      member _.Nodes = nodes
+      member _.Reuse = reuse
+      member _.Rewrites with get () = rewrites and set v = rewrites <- v
 
 
     [<Measure>]
@@ -137,12 +133,13 @@ module Nets =
         net.Nodes.Add (int (Port.mk addr 2))
         net.Nodes.Add (Kind.toInt kind)
         addr
+    
+    let inline freeNode (net : Net) nd =
+      net.Reuse.Push nd
 
     let annihilate (net : Net) (ndA : int) (ndB : int) =
       link net (enter net (Port.mk ndA 1)) (enter net (Port.mk ndB 1))
       link net (enter net (Port.mk ndA 2)) (enter net (Port.mk ndB 2))
-      net.Reuse.Push ndA
-      net.Reuse.Push ndB
     
     let erase net (nd : int) =
       match kind net nd with
@@ -199,7 +196,6 @@ module Nets =
       link net (Port.mk node3 0) (enter net (Port.mk ndB 1))
       link net (Port.mk node4 0) (enter net (Port.mk ndB 2))
     
-    // Assumes the nodes form an active pair.
     let interact net (ndA : int) (ndB : int) =
       match kind net ndA, kind net ndB with
       | NIL, _ | FRE, _ -> erase net ndB
@@ -209,5 +205,7 @@ module Nets =
       | ARR, DEC | DEC, ARR
       | CHK, ANN | ANN, CHK -> annihilate net ndA ndB
       | _ -> commute net ndA ndB
-      net.Reuse.Push ndA
-      net.Reuse.Push ndB
+      freeNode net ndA
+      freeNode net ndB
+
+    

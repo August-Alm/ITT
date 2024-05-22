@@ -1,12 +1,14 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
+    <OtherFlags>--sig:test.fsi</OtherFlags>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Stacks.fs" />
     <Compile Include="Deque.fs" />
     <Compile Include="Nets.fs" />
+    <Compile Include="Terms.fsi" />
     <Compile Include="Terms.fs" />
     <Compile Include="InteractionTypeTheory.fs" />
     <Compile Include="Program.fs" />
