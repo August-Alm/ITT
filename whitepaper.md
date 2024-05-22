@@ -95,7 +95,7 @@ C[(s : T u)] ~>               applying annotation
     else exn
 
 C[check A (t : T)] ~>           checking annotation
-    if A < T then t
+    if T < A then t
     else exn
 ```
 These reduction steps mimic the steps of a type-checking algorithm! The key rule for how the
@@ -161,6 +161,20 @@ two.
 ```
 Note that if the type instead was (A => A) => A => A, i.e., without the exponential, then the reduction would have yielded an exception term in the "duplicating annotation" step.
 
+As another example, consider
+```
+swap = [x1, x2] <-x; \x.[x2, x1].
+```
+It is easily verified that
+```
+check A * B => B * A swap ~> swap.
+```
+More exotic is the fact that we also have
+```
+check !A => A * A swap ~> swap
+```
+because of the "duplicating annotation" rule and subsumption !A < A. This typing should be considered as a permuted diagonal map !A => A * A.
+
 __As a more traditional type theory__
 
 As usual, let's say that a _typing context_ is a list of type annotations of variables. Given such a context, one can in the simply typed SIC discussed above define the substitution
@@ -214,7 +228,7 @@ is always valid.
 
 __Proof.__ (Sketch.) We may assume s = \x.u. We know, from ctx |- s : S => T, that ctx |- (u{x = x : S}) : T, which means (check u{x = x : S} T){ctx} is beta-equivalent to u{ctx}. The reduction of this check-expression must at some point involve steps
 ```
-check S'' (x' : S') ~> x'       (whence S'' < S')
+check S'' (x' : S') ~> x'       (whence S' < S'')
 ```
 with x' a duplicate of x, because the annotations have to dissappear for otherwise the reduction could not possibly be equivalent to u{ctx} (which has no annotated x). The beta-reduction steps are confluent, so we can follow an analogous sequence of reduction steps when reducing (\x.u t) and reach steps with subexpressions
 ```
