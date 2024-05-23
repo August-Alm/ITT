@@ -45,8 +45,8 @@ module Terms =
   type Chk =
     inherit Term
     member Term : Term
-    member Type : Checkable
-    new : Term * Checkable -> Chk
+    member Type : Type
+    new : Term * Type -> Chk
   
   type Fre =
     inherit Term
@@ -70,3 +70,5 @@ module Terms =
   val readback : Net -> Term
 
   val roundtrip : Term -> Term
+
+  val reduce : Term -> Term

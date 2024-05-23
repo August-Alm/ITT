@@ -12,28 +12,20 @@ namespace ITT
             | Arrow of Type * Type
             | Box of Type
         
-        type Checkable =
-            | CUnit
-            | CTuple of Checkable * Checkable
-            | CArrow of Type * Checkable
-        
         [<RequireQualifiedAccess>]
         module Type =
             
+            /// Reduces a type to its normal form:
+            /// `!` is idempotent and distributes over `⊗`.
             val reduce: typ: Type -> Type
             
             val show: typ: Type -> string
             
+            /// Returns `true` if `typ1` is a subtype of `typ2`, written `typ1 < typ2`.
+            /// Subsumption is defined by the requirements that `typ < typ` and `typ < !typ`
+            /// for all types, and giving tensor and arrow types their usual co- and contravariance
+            /// properties.
             val isSubtype: typ1: Type -> typ2: Type -> bool
-        
-        [<RequireQualifiedAccess>]
-        module Checkable =
-            
-            val toType: a: Checkable -> Type
-            
-            val show: (Checkable -> string)
-            
-            val isSubtype: typ: Type -> a: Checkable -> bool
 
 namespace ITT
     
@@ -137,9 +129,9 @@ namespace ITT
             
             new: unit -> Net
             
-            member Checkables: ResizeArray<Type.Checkable>
-            
             member Nodes: ResizeArray<int>
+            
+            member Redices: System.Collections.Generic.Stack<struct (int * int)>
             
             member Reuse: Reuse
             
@@ -161,42 +153,73 @@ namespace ITT
             
             val inline slot: port: Port -> int
         
-        val inline getRoot: net: Net -> int
+        module Net =
+            
+            val inline getRoot: net: Net -> int
+            
+            val inline enter: net: Net -> port: Port -> Port
+            
+            val inline getFirst: net: Net -> int
+            
+            val kind: net: Net -> node: int -> Kind
+            
+            val getType: net: Net -> node: int -> Type.Type
+            
+            val setType: net: Net -> node: int -> typ: Type.Type -> unit
+            
+            val inline private set:
+              net: Net -> portA: Port -> portB: Port -> unit
+            
+            val link: net: Net -> portA: Port -> portB: Port -> unit
+            
+            val mkNode: net: Net -> kind: Kind -> int
+            
+            val mkChkNode: net: Net -> typ: Type.Type -> int
+            
+            val mkAnnNode: net: Net -> typ: Type.Type -> int
+            
+            val inline freeNode: net: Net -> nd: int -> unit
         
-        val inline enter: net: Net -> port: Port -> Port
-        
-        val inline getFirst: net: Net -> int
-        
-        val inline kind: net: Net -> node: int -> Kind
-        
-        val inline getType: net: Net -> node: int -> Type.Type
-        
-        val inline setType: net: Net -> node: int -> typ: Type.Type -> unit
-        
-        val inline getCheckable: net: Net -> node: int -> Type.Checkable
-        
-        val inline setCheckable:
-          net: Net -> node: int -> a: Type.Checkable -> unit
-        
-        val inline set: net: Net -> portA: Port -> portB: Port -> unit
-        
-        val inline link: net: Net -> portA: Port -> portB: Port -> unit
-        
-        val mkNode: net: Net -> kind: Kind -> int
-        
-        val mkChkNode: net: Net -> a: Type.Checkable -> int
-        
-        val mkAnnNode: net: Net -> typ: Type.Type -> int
-        
-        val inline freeNode: net: Net -> nd: int -> unit
-        
-        val annihilate: net: Net -> ndA: int -> ndB: int -> unit
-        
-        val erase: net: Net -> nd: int -> unit
-        
-        val commute: net: Net -> ndA: int -> ndB: int -> unit
-        
-        val interact: net: Net -> ndA: int -> ndB: int -> unit
+        module Interaction =
+            
+            val interact_NIL_FRE: net: Net -> nil: int -> fre: int -> unit
+            
+            val interact_NIL_APP: net: Net -> nil: int -> app: int -> unit
+            
+            val interact_NIL_DUP: net: Net -> nil: int -> dup: int -> unit
+            
+            val interact_NIL_CHK: net: Net -> nil: int -> chk: int -> unit
+            
+            val interact_LAM_FRE: net: Net -> lam: int -> fre: int -> unit
+            
+            val interact_LAM_APP: net: Net -> lam: int -> app: int -> unit
+            
+            val interact_LAM_DUP: net: Net -> lam: int -> dup: int -> unit
+            
+            val private interact_3_CHK:
+              net: Net -> nd: int -> chk: int -> typ: Type.Type -> unit
+            
+            val interact_LAM_CHK: net: Net -> lam: int -> chk: int -> unit
+            
+            val interact_SUP_FRE: net: Net -> sup: int -> fre: int -> unit
+            
+            val interact_SUP_APP: net: Net -> sup: int -> app: int -> unit
+            
+            val interact_SUP_DUP: net: Net -> sup: int -> dup: int -> unit
+            
+            val interact_SUP_CHK: net: Net -> sup: int -> chk: int -> unit
+            
+            val interact_ANN_FRE: net: Net -> ann: int -> fre: int -> unit
+            
+            val interact_ANN_APP: net: Net -> ann: int -> app: int -> unit
+            
+            val interact_ANN_DUP: net: Net -> ann: int -> dup: int -> unit
+            
+            val interact_ANN_CHK: net: Net -> ann: int -> chk: int -> unit
+            
+            val interact: net: Net -> nd1: int -> nd2: int -> unit
+            
+            val reduce: net: Net -> int
 
 namespace ITT
     
@@ -258,11 +281,11 @@ namespace ITT
         type Chk =
             inherit Term
             
-            new: trm: Term * typ: Type.Checkable -> Chk
+            new: trm: Term * typ: Type.Type -> Chk
             
             member Term: Term with get, set
             
-            member Type: Type.Checkable with get, set
+            member Type: Type.Type with get, set
         
         type Fre =
             inherit Term
@@ -321,6 +344,8 @@ namespace ITT
         val readback: net: Nets.Net -> Term
         
         val roundtrip: term: Term -> Term
+        
+        val reduce: term: Term -> Term
 
 namespace ITT
     
@@ -532,6 +557,8 @@ namespace ITT
         val churc2Alt: Terms.Lam
         
         val idlam: Terms.Lam
+        
+        val idapp: Terms.App
         
         val killer: Terms.Fre
         

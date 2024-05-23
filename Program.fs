@@ -258,11 +258,13 @@ module Program =
   
   let idlam = Lam ("x", Var "x")
 
+  let idapp = App (idlam, Lam ("y", Var "y"))
+
   let killer = Fre (Var "x", Lam ("x", Nil ()))
 
   let vanishing = Fre (idlam, Nil ())
 
-  let checker = Chk (idlam, CArrow (Unit, CUnit))
+  let checker = Chk (idlam, Arrow (Unit, Unit))
 
   let isEven x =
     boolToInt (x % 2 = 0)
@@ -270,39 +272,39 @@ module Program =
   [<EntryPoint>]
   let main _ =
 
-    printfn "Conquered Fibonacci of 10: %A" (DivideAndConquer.fib 10)
+    //printfn "Conquered Fibonacci of 10: %A" (DivideAndConquer.fib 10)
 
     //printfn "testInt () = %d" (testInt ())
 
-    let span = ReadOnlySpan [| '1'B; '2'B; '.'B; '7'B; |]
-    let n = readInt span
-    printfn "Read int: %A" n
+    //let span = ReadOnlySpan [| '1'B; '2'B; '.'B; '7'B; |]
+    //let n = readInt span
+    //printfn "Read int: %A" n
 
-    let span = ReadOnlySpan [| '-'B; '1'B; '2'B; '.'B; '7'B; |]
-    let n = readInt span
-    printfn "Read int: %A" n
+    //let span = ReadOnlySpan [| '-'B; '1'B; '2'B; '.'B; '7'B; |]
+    //let n = readInt span
+    //printfn "Read int: %A" n
 
-    let span = ReadOnlySpan [| '2'B; '.'B; '7'B; |]
-    let n = readInt span
-    printfn "Read int: %A" n
+    //let span = ReadOnlySpan [| '2'B; '.'B; '7'B; |]
+    //let n = readInt span
+    //printfn "Read int: %A" n
 
     
-    let x = minimum 3 4
-    printfn "Minimum of 3 and 4: %d" x
+    //let x = minimum 3 4
+    //printfn "Minimum of 3 and 4: %d" x
 
-    let x = minimum -4 3
-    printfn "Minimum of -4 and 3: %d" x
+    //let x = minimum -4 3
+    //printfn "Minimum of -4 and 3: %d" x
 
-    let clock = Stopwatch ()
-    let test1 label f =
-      clock.Reset ()
-      clock.Start ()
-      for _ = 1 to 1000 do
-        for i = 0 to 20 do
-          f i |> ignore
-      clock.Stop ()
-      printfn "%s: %A" label clock.Elapsed
-    clock.Start ()
+    //let clock = Stopwatch ()
+    //let test1 label f =
+    //  clock.Reset ()
+    //  clock.Start ()
+    //  for _ = 1 to 1000 do
+    //    for i = 0 to 20 do
+    //      f i |> ignore
+    //  clock.Stop ()
+    //  printfn "%s: %A" label clock.Elapsed
+    //clock.Start ()
 
     //test1 "Heap iteration" fibHeap
     //test1 "Stack iteration" fibStack
@@ -319,9 +321,12 @@ module Program =
     let foo t =
       printfn "before: %s" (t |> show)
       printfn "after: %s" (t |> roundtrip |> show)
+      printfn "reduced: %s" (t |> reduce |> show)
       printfn ""
 
     foo idlam
+
+    foo idapp
 
     foo church2
 
@@ -333,24 +338,23 @@ module Program =
 
     foo checker
 
+    //printfn "Cast 'true' as int: %d" (boolToInt true)
+    //printfn "Cast 'false' as int: %d" (boolToInt false)
 
-    printfn "Cast 'true' as int: %d" (boolToInt true)
-    printfn "Cast 'false' as int: %d" (boolToInt false)
-
-    for i = 0 to 10 do
-      printfn "%d is even: %d" i (isEven i)
+    //for i = 0 to 10 do
+    //  printfn "%d is even: %d" i (isEven i)
     
-    let array = Array.init 100000000 id
-    refTest clock array
-    fixedTest clock array
-    foreachTest clock array
+    //let array = Array.init 100000000 id
+    //refTest clock array
+    //fixedTest clock array
+    //foreachTest clock array
 
-    let mutable accumulator = 0
-    testBoolToInt clock &accumulator
-    testBoolToIntSafe clock &accumulator
+    //let mutable accumulator = 0
+    //testBoolToInt clock &accumulator
+    //testBoolToIntSafe clock &accumulator
     
-    printfn "size of ABC: %d" (sizeof<ABC>)
-    printfn "size of R: %d" (sizeof<R>)
-    printfn "size of bigint: %d" (sizeof<bigint>)
+    //printfn "size of ABC: %d" (sizeof<ABC>)
+    //printfn "size of R: %d" (sizeof<R>)
+    //printfn "size of bigint: %d" (sizeof<bigint>)
 
     0

@@ -3,6 +3,7 @@ namespace ITT
 module Terms =
 
   open Nets
+  open Net
   open System.Collections.Generic
   open System
   open Type
@@ -41,7 +42,7 @@ module Terms =
   type Chk (trm, typ) =
     inherit Term ()
     member val Term : Term = trm with get, set
-    member val Type : Checkable = typ with get, set
+    member val Type : Type = typ with get, set
   
   type Fre (trm, bod) =
     inherit Term ()
@@ -60,13 +61,13 @@ module Terms =
   let rec show (trm : Term) =
     match trm with
     | null -> failwith "null term"
-    | :? Nil -> "()"
+    | :? Nil -> "⊥"
     | :? Var as var -> var.Name
     | :? Lam as lam -> $"λ{lam.Name}.{show lam.Body}"
     | :? App as app -> $"({show app.Func} {show app.Argm})"
-    | :? Sup as sup -> $"{show sup.Left} ⊗ {show sup.Right})"
+    | :? Sup as sup -> $"{show sup.Left} ⊗ {show sup.Right}"
     | :? Ann as ann -> $"({show ann.Term} : {Type.show ann.Type})"
-    | :? Chk as chk -> $"{show chk.Term} ⇓ {Checkable.show chk.Type}"
+    | :? Chk as chk -> $"({show chk.Term} ⇓ {Type.show chk.Type})"
     | :? Fre as fre -> $"free {show fre.Term}; {show fre.Body}"
     | :? Dup as dup -> $"{dup.Left} ⊗ {dup.Right} ← {show dup.Term}; {show dup.Body}"
     | _ -> failwith "invalid term"
@@ -174,7 +175,7 @@ module Terms =
     | APP -> App (null, null)
     | SUP -> Sup (null, null)
     | ANN -> Ann (null, Unit)
-    | CHK -> Chk (null, CUnit)
+    | CHK -> Chk (null, Unit)
     | FRE -> Fre (null, null)
     | DUP -> 
       let x = nameOf vars (Port.mk node 1)
@@ -213,7 +214,7 @@ module Terms =
     | CHK ->
       let chk = trms[node] :?> Chk
       chk.Term <- getTerm 0
-      chk.Type <- getCheckable net node
+      chk.Type <- getType net node
     | FRE ->
       let fre = trms[node] :?> Fre
       fre.Term <- getTerm 0
@@ -246,3 +247,7 @@ module Terms =
   let roundtrip (term : Term) =
     readback (build term)
   
+  let reduce (term : Term) =
+    let net = build term
+    Interaction.reduce net |> ignore
+    readback net
