@@ -102,11 +102,21 @@ module Nets =
 
     let inline getRoot (net : Net) = 0
 
+    let getNodes (net : Net) =
+      let result = ResizeArray<int> ()
+      for addr = 1 to net.Nodes.Count / 4 - 1 do
+        if not (net.Reuse.Contains addr) then
+          result.Add addr
+      result
+
     let inline enter (net : Net) (port : Port) : Port =
       LanguagePrimitives.Int32WithMeasure net.Nodes[int port]
   
-    let inline getFirst net =
+    let getFirst net =
       Port.address (enter net (Port.mk (getRoot net) 0))
+      //while addr < net.Nodes.Count / 4 && net.Reuse.Contains addr do
+      //  addr <- Port.address (enter net (Port.mk addr 0))
+      //addr
 
     let kind (net : Net) (node : int) =
       Kind.fromInt (net.Nodes[int <| Port.mk node 3])
@@ -126,8 +136,15 @@ module Nets =
   
     let link (net : Net) (portA : Port) (portB : Port) =
       set net portA portB; set net portB portA
-      if (Port.address portA <> Port.address portB) && (Port.slot portA = 0 && Port.slot portB = 0) then
-        net.Redices.Push (struct (Port.address portA, Port.address portB))
+      let addrA = Port.address portA
+      let addrB = Port.address portB
+      if
+        (Port.slot portA = 0 && Port.slot portB = 0) &&
+        (addrA <> getRoot net) &&
+        (addrB <> getRoot net) &&
+        (addrA <> addrB)
+      then
+        net.Redices.Push (struct (addrA, addrB))
   
     let mkNode (net : Net) (kind : Kind) =
       match net.Reuse.TryPop () with
@@ -267,9 +284,9 @@ module Nets =
         let lam' = mkNode net LAM
         link net (Port.mk lam' 0) (enter net (Port.mk chk 1))
         link net (Port.mk lam' 1) (Port.mk ann' 1)
-        link net (Port.mk lam' 2) (Port.mk chk' 0)
+        link net (Port.mk lam' 2) (Port.mk chk' 1)
         link net (Port.mk ann' 0) (enter net (Port.mk lam 1))
-        link net (Port.mk chk' 1) (enter net (Port.mk lam 2))
+        link net (Port.mk chk' 0) (enter net (Port.mk lam 2))
         freeNode net lam
         freeNode net chk
       | _ -> failwith "cannot check lambda against non-arrow type"

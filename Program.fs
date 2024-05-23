@@ -319,8 +319,8 @@ module Program =
     //printfn "Golden mean F_%d: %A ms" n clock.Elapsed.Milliseconds
 
     let foo t =
-      printfn "before: %s" (t |> show)
-      printfn "after: %s" (t |> roundtrip |> show)
+      printfn "original: %s" (t |> show)
+      printfn "readback: %s" (t |> roundtrip |> show)
       printfn "reduced: %s" (t |> reduce |> show)
       printfn ""
 

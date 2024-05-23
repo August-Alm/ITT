@@ -114,12 +114,12 @@ module Terms =
       go up trm.Body
     | :? Ann as trm ->
       let ann = mkAnnNode net trm.Type
-      link net (Port.mk ann 2) (go (Port.mk ann 2) trm.Term)
+      link net (Port.mk ann 1) (go (Port.mk ann 1) trm.Term)
       Port.mk ann 0
     | :? Chk as trm ->
       let chk = mkChkNode net trm.Type
       link net (Port.mk chk 0) (go (Port.mk chk 0) trm.Term)
-      Port.mk chk 2
+      Port.mk chk 1
 
   let inject net (host : Port) (term : Term) =
     let scope = Dictionary<string, Port> ()
@@ -160,13 +160,6 @@ module Terms =
       vars.Add (varPort, name)
       name
   
-  let getNodes (net : Net) =
-    let result = ResizeArray<int> ()
-    for addr = 1 to net.Nodes.Count / 4 - 1 do
-      if not (net.Reuse.Contains addr) then
-        result.Add addr
-    result
-
   let termOfNode net vars node =
     match kind net node with
     | ROOT -> failwith "cannot convert root node to expression"
@@ -247,6 +240,11 @@ module Terms =
   let roundtrip (term : Term) =
     readback (build term)
   
+  let reduceSteps (term : Term) =
+    let net = build term
+    let steps = Interaction.reduce net
+    steps, readback net
+
   let reduce (term : Term) =
     let net = build term
     Interaction.reduce net |> ignore
