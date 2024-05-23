@@ -252,7 +252,7 @@ module Program =
     let bod = App (Var "s1", App (Var "s2", Var "z"))
     Dup ("s1", "s2", Var "s", Lam ("s", Lam ("z", bod)))
   
-  let churc2Alt =
+  let church2Alt =
     let bod = App (Var "s1", App (Var "s2", Var "z"))
     Lam ("s", Lam ("z", Dup ("s1", "s2", Var "s", bod)))
   
@@ -264,7 +264,12 @@ module Program =
 
   let vanishing = Fre (idlam, Nil ())
 
-  let checker = Chk (idlam, Arrow (Unit, Unit))
+  let checker1 = Chk (idlam, Arrow (Unit, Unit))
+
+  let checker2 =
+    let e = Box (Arrow (Unit, Unit))
+    let t = Arrow (e, Arrow (Unit, Unit))
+    Chk (church2, t)
 
   let isEven x =
     boolToInt (x % 2 = 0)
@@ -330,13 +335,15 @@ module Program =
 
     foo church2
 
-    foo churc2Alt
+    foo church2Alt
 
     foo killer
 
     foo vanishing
 
-    foo checker
+    foo checker1
+
+    foo checker2
 
     //printfn "Cast 'true' as int: %d" (boolToInt true)
     //printfn "Cast 'false' as int: %d" (boolToInt false)

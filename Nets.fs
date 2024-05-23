@@ -73,7 +73,7 @@ module Nets =
     let types = ResizeArray<Type> 128
     let reuse = Reuse ()
     let redices = Stack<struct (int * int)> 512
-    let mutable rewrites = -1
+    let mutable rewrites = 0
     do nodes.AddRange [| 2; 1; 0; 0 |]
     member _.Nodes = nodes
     member _.Types = types
@@ -169,7 +169,9 @@ module Nets =
       | true, addr -> 
         set net (Port.mk addr 0) (Port.mk addr 0)
         set net (Port.mk addr 1) (Port.mk addr 1)
-        setType net addr typ
+        set net (Port.mk addr 2) (LanguagePrimitives.Int32WithMeasure net.Types.Count)
+        net.Types.Add typ
+        //setType net addr typ
         net.Nodes[int (Port.mk addr 3)] <- Kind.toInt Kind.CHK
         addr
       | false, _ ->
@@ -188,7 +190,9 @@ module Nets =
       | true, addr -> 
         set net (Port.mk addr 0) (Port.mk addr 0)
         set net (Port.mk addr 1) (Port.mk addr 1)
-        setType net addr typ
+        set net (Port.mk addr 2) (LanguagePrimitives.Int32WithMeasure net.Types.Count)
+        net.Types.Add typ
+        //setType net addr typ
         net.Nodes[int (Port.mk addr 3)] <- Kind.toInt Kind.ANN
         addr
       | false, _ ->
@@ -349,8 +353,8 @@ module Nets =
         link net (Port.mk app' 0) (enter net (Port.mk ann 1))
         link net (Port.mk app' 1) (Port.mk chk' 1)
         link net (Port.mk app' 2) (Port.mk ann' 1)
-        link net (Port.mk chk' 0) (enter net (Port.mk ann 1))
-        link net (Port.mk ann' 0) (enter net (Port.mk ann 2))
+        link net (Port.mk chk' 0) (enter net (Port.mk app 1))
+        link net (Port.mk ann' 0) (enter net (Port.mk app 2))
         freeNode net ann
         freeNode net app
       | _ -> failwith "cannot apply non-arrow type"

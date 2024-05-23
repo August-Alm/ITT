@@ -72,3 +72,5 @@ module Terms =
   val roundtrip : Term -> Term
 
   val reduce : Term -> Term
+
+  val reduceSteps : Term -> int * Term

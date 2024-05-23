@@ -185,7 +185,15 @@ module Terms =
       let port = enter net (Port.mk node slot)
       match vars.TryGetValue port with
       | true, name -> (Var name) :> Term
-      | false, _ -> trms[Port.address port]
+      | false, _ ->
+        try
+          trms[Port.address port]
+        with
+        | e ->
+          printfn "looking for %d" (Port.address port)
+          for KeyValue (k, trm) in trms do
+            printfn "%d: %A" k trm
+          raise e
     match kind net node with
     | ROOT -> failwith "cannot connect root node"
     | NIL -> ()
@@ -247,5 +255,5 @@ module Terms =
 
   let reduce (term : Term) =
     let net = build term
-    Interaction.reduce net |> ignore
+    printfn "reduced in %d steps" (Interaction.reduce net)
     readback net
