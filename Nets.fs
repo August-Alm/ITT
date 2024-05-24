@@ -234,8 +234,8 @@ module Nets =
     
     let interact_LAM_FRE net (lam : int) (fre : int) =
       let nil = mkNode net NIL
-      link net (Port.mk fre 0) (enter net (Port.mk lam 1))
-      link net (Port.mk nil 0) (enter net (Port.mk lam 2))
+      link net (Port.mk fre 0) (enter net (Port.mk lam 2))
+      link net (Port.mk nil 0) (enter net (Port.mk lam 1))
       freeNode net lam
     
     let interact_LAM_APP net (lam : int) (app : int) =
@@ -421,5 +421,6 @@ module Nets =
     let reduce (net : Net) =
       while net.Redices.Count > 0 do
         let struct (nd1, nd2) = net.Redices.Pop ()
+        printfn "interaction %A ~~ %A" (kind net nd1) (kind net nd2)
         interact net nd1 nd2
       net.Rewrites
