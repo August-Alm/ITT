@@ -3,50 +3,24 @@ namespace ITT
 module Nets =
 
   open System.Collections.Generic
+  open LanguagePrimitives
   open Type
 
   type Kind =
-    | ROOT
-    | NIL
-    | LAM
-    | APP
-    | SUP
-    | ANN
-    | CHK
-    | FRE
-    | DUP
-  with
-    static member arity (kind : Kind) =
-      match kind with
-      | ROOT | NIL | FRE -> 1
-      | ANN | CHK -> 2
-      | _ -> 3
-    
-    static member fromInt (i : int) =
-      match i with
-      | 0 -> ROOT
-      | 1 -> NIL
-      | 2 -> LAM
-      | 3 -> APP
-      | 4 -> SUP
-      | 5 -> ANN
-      | 6 -> CHK
-      | 7 -> FRE
-      | 8 -> DUP
-      | _ -> failwith $"invalid kind: {i}"
-    
-    static member toInt (kind : Kind) =
-      match kind with
-      | ROOT -> 0
-      | NIL -> 1
-      | LAM -> 2
-      | APP -> 3
-      | SUP -> 4
-      | ANN -> 5
-      | CHK -> 6
-      | FRE -> 7
-      | DUP -> 8
+    | ROOT = 0
+    | NIL = 1
+    | LAM = 2
+    | APP = 3
+    | SUP = 4
+    | ANN = 5
+    | CHK = 6
+    | FRE = 7
+    | DUP = 8
   
+  [<RequireQualifiedAccess>]
+  module Kind =
+    let inline toInt (kind : Kind) = int kind
+    let inline ofInt (k : int) = EnumOfValue<int, Kind> k
 
   type Reuse () =
     let stack = Stack<int> ()
@@ -91,7 +65,7 @@ module Nets =
   module Port =
 
     let inline mk (address : int) (slot : int) : Port =
-      LanguagePrimitives.Int32WithMeasure ((address <<< 2) ||| slot)
+      Int32WithMeasure ((address <<< 2) ||| slot)
     
     let inline address (port : Port) = int port >>> 2
 
@@ -107,29 +81,24 @@ module Nets =
       for addr = 1 to net.Nodes.Count / 4 - 1 do
         if not (net.Reuse.Contains addr) then
           result.Add addr
-      result
+      Array.ofSeq result
 
-    let inline enter (net : Net) (port : Port) : Port =
-      LanguagePrimitives.Int32WithMeasure net.Nodes[int port]
+    let enter (net : Net) (port : Port) : Port =
+      Int32WithMeasure net.Nodes[int port]
   
     let kind (net : Net) (node : int) =
-      Kind.fromInt (net.Nodes[int <| Port.mk node 3])
+      Kind.ofInt (net.Nodes[int <| Port.mk node 3])
   
     let getFirst net =
       Port.address (enter net (Port.mk (getRoot net) 0))
 
-    let getType (net : Net) (node : int) =
-      match kind net node with
-      |  Kind.ANN | Kind.CHK -> net.Types[net.Nodes[int <| Port.mk node 2]]
-      | _ -> failwith "only ANN and CHK nodes have a type"
-  
-    let setType (net : Net) (node : int) (typ : Type) =
-      match kind net node with
-      |  Kind.ANN | Kind.CHK -> net.Types[net.Nodes[int <| Port.mk node 2]] <- typ
-      | _ -> failwith "only ANN and CHK nodes have a type"
-
     let inline private set (net : Net) (portA : Port) (portB : Port) =
       net.Nodes[int portA] <- int portB
+
+    let getType (net : Net) (node : int) =
+      match kind net node with
+      | Kind.ANN | Kind.CHK -> net.Types[net.Nodes[int (Port.mk node 2)]]
+      | _ -> failwith "only ANN and CHK nodes have a type"
   
     let link (net : Net) (portA : Port) (portB : Port) =
       set net portA portB; set net portB portA
@@ -166,10 +135,9 @@ module Nets =
       | true, addr -> 
         set net (Port.mk addr 0) (Port.mk addr 0)
         set net (Port.mk addr 1) (Port.mk addr 1)
-        set net (Port.mk addr 2) (LanguagePrimitives.Int32WithMeasure net.Types.Count)
+        set net (Port.mk addr 2) (Int32WithMeasure net.Types.Count)
+        set net (Port.mk addr 3) (Int32WithMeasure (Kind.toInt Kind.CHK))
         net.Types.Add typ
-        //setType net addr typ
-        net.Nodes[int (Port.mk addr 3)] <- Kind.toInt Kind.CHK
         addr
       | false, _ ->
         let len = net.Nodes.Count
@@ -187,10 +155,9 @@ module Nets =
       | true, addr -> 
         set net (Port.mk addr 0) (Port.mk addr 0)
         set net (Port.mk addr 1) (Port.mk addr 1)
-        set net (Port.mk addr 2) (LanguagePrimitives.Int32WithMeasure net.Types.Count)
+        set net (Port.mk addr 2) (Int32WithMeasure net.Types.Count)
+        set net (Port.mk addr 3) (Int32WithMeasure (Kind.toInt Kind.ANN))
         net.Types.Add typ
-        //setType net addr typ
-        net.Nodes[int (Port.mk addr 3)] <- Kind.toInt Kind.ANN
         addr
       | false, _ ->
         let len = net.Nodes.Count
@@ -216,14 +183,14 @@ module Nets =
       freeNode net fre
 
     let interact_NIL_APP net (nil : int) (app : int) =
-      let fre = mkNode net FRE
+      let fre = mkNode net Kind.FRE
       link net (Port.mk nil 0) (enter net (Port.mk app 2))
       link net (Port.mk fre 0) (enter net (Port.mk app 1))
       freeNode net app
 
     let interact_NIL_DUP net (nil : int) (dup : int) =
       let nil1 = nil
-      let nil2 = mkNode net NIL
+      let nil2 = mkNode net Kind.NIL
       link net (Port.mk nil1 0) (enter net (Port.mk dup 1))
       link net (Port.mk nil2 0) (enter net (Port.mk dup 2))
       freeNode net dup
@@ -233,7 +200,7 @@ module Nets =
       freeNode net chk
     
     let interact_LAM_FRE net (lam : int) (fre : int) =
-      let nil = mkNode net NIL
+      let nil = mkNode net Kind.NIL
       link net (Port.mk fre 0) (enter net (Port.mk lam 2))
       link net (Port.mk nil 0) (enter net (Port.mk lam 1))
       freeNode net lam
@@ -245,10 +212,10 @@ module Nets =
       freeNode net app
 
     let interact_LAM_DUP net (lam : int) (dup : int) =
-      let lam1 = mkNode net LAM
-      let lam2 = mkNode net LAM
-      let sup' = mkNode net SUP
-      let dup' = mkNode net DUP
+      let lam1 = mkNode net Kind.LAM
+      let lam2 = mkNode net Kind.LAM
+      let sup' = mkNode net Kind.SUP
+      let dup' = mkNode net Kind.DUP
       link net (Port.mk lam1 0) (enter net (Port.mk dup 1))
       link net (Port.mk lam1 1) (Port.mk sup' 1)
       link net (Port.mk lam1 2) (Port.mk dup' 1)
@@ -264,8 +231,8 @@ module Nets =
       let nd' = mkNode net (kind net nd)
       let chk1 = mkChkNode net typ
       let chk2 = mkChkNode net typ
-      let dup = mkNode net DUP
-      let fre = mkNode net FRE
+      let dup = mkNode net Kind.DUP
+      let fre = mkNode net Kind.FRE
       link net (Port.mk nd' 0) (Port.mk chk1 0)
       link net (Port.mk nd' 1) (enter net (Port.mk nd 1))
       link net (Port.mk nd' 2) (enter net (Port.mk nd 2))
@@ -282,7 +249,7 @@ module Nets =
       | Arrow (s, a) ->
         let chk' = mkChkNode net a
         let ann' = mkAnnNode net s
-        let lam' = mkNode net LAM
+        let lam' = mkNode net Kind.LAM
         link net (Port.mk lam' 0) (enter net (Port.mk chk 1))
         link net (Port.mk lam' 1) (Port.mk ann' 1)
         link net (Port.mk lam' 2) (Port.mk chk' 1)
@@ -294,16 +261,16 @@ module Nets =
     
     let interact_SUP_FRE net (sup : int) (fre : int) =
       let fre1 = fre
-      let fre2 = mkNode net FRE
+      let fre2 = mkNode net Kind.FRE
       link net (Port.mk fre1 0) (enter net (Port.mk sup 1))
       link net (Port.mk fre2 0) (enter net (Port.mk sup 2))
       freeNode net sup
     
     let interact_SUP_APP net (sup : int) (app : int) =
-      let app1 = mkNode net APP
-      let app2 = mkNode net APP
-      let sup' = mkNode net SUP
-      let dup' = mkNode net DUP
+      let app1 = mkNode net Kind.APP
+      let app2 = mkNode net Kind.APP
+      let sup' = mkNode net Kind.SUP
+      let dup' = mkNode net Kind.DUP
       link net (Port.mk sup' 0) (enter net (Port.mk app 2))
       link net (Port.mk sup' 1) (Port.mk app1 2)
       link net (Port.mk sup' 2) (Port.mk app2 2)
@@ -327,7 +294,7 @@ module Nets =
       | Tuple (a, b) ->
         let chk1 = mkChkNode net a
         let chk2 = mkChkNode net b
-        let sup' = mkNode net SUP
+        let sup' = mkNode net Kind.SUP
         link net (Port.mk sup' 0) (enter net (Port.mk chk 1))
         link net (Port.mk sup' 1) (Port.mk chk1 1)
         link net (Port.mk sup' 2) (Port.mk chk2 1)
@@ -346,7 +313,7 @@ module Nets =
       | Box (Arrow (s, t)) | Arrow (s, t) ->
         let ann' = mkAnnNode net t
         let chk' = mkChkNode net s
-        let app' = mkNode net APP
+        let app' = mkNode net Kind.APP
         link net (Port.mk app' 0) (enter net (Port.mk ann 1))
         link net (Port.mk app' 1) (Port.mk chk' 1)
         link net (Port.mk app' 2) (Port.mk ann' 1)
@@ -361,7 +328,7 @@ module Nets =
       | Box _ as typ ->
         let ann1 = mkAnnNode net typ
         let ann2 = mkAnnNode net typ
-        let dup' = mkNode net DUP
+        let dup' = mkNode net Kind.DUP
         link net (Port.mk dup' 0) (enter net (Port.mk ann 1))
         link net (Port.mk dup' 1) (Port.mk ann1 1)
         link net (Port.mk dup' 2) (Port.mk ann2 1)
@@ -421,6 +388,6 @@ module Nets =
     let reduce (net : Net) =
       while net.Redices.Count > 0 do
         let struct (nd1, nd2) = net.Redices.Pop ()
-        printfn "interaction %A ~~ %A" (kind net nd1) (kind net nd2)
+        Debug.printfn "interaction {kind net nd1} ~~ {kind net nd2}"
         interact net nd1 nd2
       net.Rewrites

@@ -11,6 +11,7 @@ module Terms =
   module Port =
     let show net port = $"{kind net (Port.address port)}:{Port.slot port}"
 
+
   [<AbstractClass; AllowNullLiteral>]
   type Term () = class end
   
@@ -82,35 +83,35 @@ module Terms =
     let inline go u t = encode net scope vars u t
     match trm with
     | :? Nil ->
-      let nil = mkNode net NIL
+      let nil = mkNode net Kind.NIL
       link net (Port.mk nil 1) (Port.mk nil 2)
       Port.mk nil 0
     | :? Var as trm ->
       vars.Add (trm.Name, up)
       up
     | :? Lam as trm ->
-      let lam = mkNode net LAM
+      let lam = mkNode net Kind.LAM
       scope.Add (trm.Name, Port.mk lam 1)
       link net (Port.mk lam 2) (go (Port.mk lam 2) trm.Body)
       Port.mk lam 0
     | :? App as trm ->
-      let app = mkNode net APP
+      let app = mkNode net Kind.APP
       link net (Port.mk app 0) (go (Port.mk app 0) trm.Func)
       link net (Port.mk app 1) (go (Port.mk app 1) trm.Argm)
       Port.mk app 2
     | :? Sup as trm ->
-      let sup = mkNode net SUP
+      let sup = mkNode net Kind.SUP
       link net (Port.mk sup 1) (go (Port.mk sup 1) trm.Left)
       link net (Port.mk sup 2) (go (Port.mk sup 2) trm.Right)
       Port.mk sup 0
     | :? Dup as trm ->
-      let dup = mkNode net DUP
+      let dup = mkNode net Kind.DUP
       scope.Add (trm.Left, Port.mk dup 1)
       scope.Add (trm.Right, Port.mk dup 2)
       link net (Port.mk dup 0) (go (Port.mk dup 0) trm.Term)
       go up trm.Body
     | :? Fre as trm ->
-      let fre = mkNode net FRE
+      let fre = mkNode net Kind.FRE
       link net (Port.mk fre 1) (Port.mk fre 2)
       link net (Port.mk fre 0) (go (Port.mk fre 0) trm.Term)
       go up trm.Body
@@ -130,15 +131,15 @@ module Terms =
     for x, port in vars do
       match scope.TryGetValue x with
       | true, next ->
-        //printfn "%s: %s -- %s" x (Port.show net port) (Port.show net next)
+        Debug.printfn $"{x}: {Port.show net port} {Port.show net next}"
         if enter net next <> next then
-          failwith $"Variable {x} is bound more than once."
+          failwith $"variable {x} is bound more than once"
         link net port next
-      | false, _ -> failwith $"Variable {x} is not bound."
+      | false, _ -> failwith $"variable {x} is not bound"
     for KeyValue (_, port) in scope do
       if enter net port = port then
-        //printfn "adding FRE to %A"(kind net (Port.address port))
-        let fre = mkNode net FRE
+        Debug.printfn $"adding FRE to {kind net (Port.address port)} node"
+        let fre = mkNode net Kind.FRE
         link net (Port.mk fre 1) (Port.mk fre 2)
         link net (Port.mk fre 0) port
     if host <> main then link net host main
@@ -165,19 +166,17 @@ module Terms =
       name
   
   let termOfNode net vars node =
+    let inline getName slot = nameOf vars (Port.mk node slot)
     match kind net node with
-    | ROOT -> failwith "cannot convert root node to expression"
-    | NIL -> Nil () :> Term
-    | LAM -> Lam (nameOf vars (Port.mk node 1), null)
-    | APP -> App (null, null)
-    | SUP -> Sup (null, null)
-    | ANN -> Ann (null, Unit)
-    | CHK -> Chk (null, Unit)
-    | FRE -> Fre (null, null)
-    | DUP -> 
-      let x = nameOf vars (Port.mk node 1)
-      let y = nameOf vars (Port.mk node 2)
-      Dup (x, y, null, null)
+    | Kind.ROOT -> failwith "cannot convert root node to expression"
+    | Kind.NIL -> Nil () :> Term
+    | Kind.LAM -> Lam (getName 1, null)
+    | Kind.APP -> App (null, null)
+    | Kind.SUP -> Sup (null, null)
+    | Kind.ANN -> Ann (null, Unit)
+    | Kind.CHK -> Chk (null, Unit)
+    | Kind.FRE -> Fre (null, null)
+    | Kind.DUP -> Dup (getName 1, getName 2, null, null)
   
   let connect net
     (vars : Dictionary<Port, string>)
@@ -191,32 +190,32 @@ module Terms =
       | true, name -> (Var name) :> Term
       | false, _ -> trms[Port.address port]
     match kind net node with
-    | ROOT -> failwith "cannot connect root node"
-    | NIL -> ()
-    | LAM ->
+    | Kind.ROOT -> failwith "cannot connect root node"
+    | Kind.NIL -> ()
+    | Kind.LAM ->
       let lam = trms[node] :?> Lam
       lam.Body <- getTerm 2
-    | APP ->
+    | Kind.APP ->
       let app = trms[node] :?> App
       app.Func <- getTerm 0
       app.Argm <- getTerm 1
-    | SUP ->
+    | Kind.SUP ->
       let sup = trms[node] :?> Sup
       sup.Left <- getTerm 1
       sup.Right <- getTerm 2
-    | ANN ->
+    | Kind.ANN ->
       let ann = trms[node] :?> Ann
       ann.Term <- getTerm 1
       ann.Type <- getType net node
-    | CHK ->
+    | Kind.CHK ->
       let chk = trms[node] :?> Chk
       chk.Term <- getTerm 0
       chk.Type <- getType net node
-    | FRE ->
+    | Kind.FRE ->
       let fre = trms[node] :?> Fre
       fre.Term <- getTerm 0
       fres.Add fre
-    | DUP ->
+    | Kind.DUP ->
       let dup = trms[node] :?> Dup
       dup.Term <- getTerm 0
       dups.Add dup
@@ -232,8 +231,6 @@ module Terms =
       trms.Add (node, trm)
     for node in nodes do
       connect net vars trms fres dups node
-    //for KeyValue (k, trm) in trms do
-    //  printfn "%d: %s" k (show trm)
     let mutable res =
       let port = enter net (Port.mk (getRoot net) 0)
       let first = Port.address port
@@ -246,7 +243,6 @@ module Terms =
       fre.Body <- res
       res <- fre
     res
-      
   
   let roundtrip (term : Term) =
     readback (build term)
@@ -258,5 +254,5 @@ module Terms =
 
   let reduce (term : Term) =
     let net = build term
-    printfn "reduced in %d steps" (Interaction.reduce net)
+    Interaction.reduce net |> ignore
     readback net

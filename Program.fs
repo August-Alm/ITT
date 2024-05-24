@@ -338,7 +338,8 @@ module Program =
     let foo t =
       printfn "original: %s" (t |> show)
       printfn "readback: %s" (t |> roundtrip |> show)
-      printfn "reduced: %s" (t |> reduce |> show)
+      let s, r = reduceSteps t
+      printfn "reduced after %d steps: %s" s (show r)
       printfn ""
 
     foo idlam
