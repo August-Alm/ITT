@@ -4,6 +4,9 @@ module Program =
 
   open ITT.Terms
   open ITT.Type
+  open System
+  open System.Threading
+  open System.Threading.Tasks
 
   let church2 =
     let bod = App (Var "s1", App (Var "s2", Var "z"))
@@ -38,6 +41,9 @@ module Program =
     let t = Arrow (e, Arrow (Unit, Unit))
     Chk (church2, Box t)
   
+  let y =
+    Dup ("f1", "f2", Var "f", Lam ("f", App (Var "f1", Var "f2")))
+  
 
   [<EntryPoint>]
   let main _ =
@@ -45,8 +51,19 @@ module Program =
     let foo t =
       printfn "original: %s" (t |> show)
       printfn "readback: %s" (t |> roundtrip |> show)
-      let s, r = reduceSteps t
-      printfn "reduced after %d steps: %s" s (show r)
+      let printReduction t =
+        try
+          let s, r = reduceSteps t
+          printfn "reduced after %d steps: %s" s (show r)
+        with
+        | e -> printfn "%s" e.Message
+      let cts = new CancellationTokenSource ()
+      let task = Task.Factory.StartNew ((fun _ ->
+        printReduction t; cts.Token.ThrowIfCancellationRequested ()),
+        cts)
+      if not (task.Wait (10_000, cts.Token)) then
+        cts.Cancel ()
+        printfn "no normal form achieved in 10 seconds"
       printfn ""
 
     foo idlam
@@ -68,5 +85,11 @@ module Program =
     foo dup
 
     foo checker3
+
+    foo y
+
+    foo (App (y, idlam))
+
+    foo (App (y, church2))
 
     0
