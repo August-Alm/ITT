@@ -271,6 +271,19 @@ module Program =
     let t = Arrow (e, Arrow (Unit, Unit))
     Chk (church2, t)
 
+  let dup =
+    let bod = App (Var "s1", App (Var "s2", Var "z"))
+    let lam = Lam ("s", Lam ("z", bod))
+    Dup ("s1", "s2", Var "s", Dup ("f1", "f2", lam, Fre (Var "f1", Var "f2")))
+    //Fre (Var "f1", Dup ("s1", "s2", Var "s", Dup ("f1", "f2", lam, Var "f2")))
+    //Dup ("f1", "f2", idlam, Fre (Var "f1", Var "f2"))
+    //Fre (Var "a", Dup ("a", "b", Nil (), Var "b"))
+
+  let checker3 =
+    let e = Box (Arrow (Unit, Unit))
+    let t = Arrow (e, Arrow (Unit, Unit))
+    Chk (church2, Box t)
+
   let isEven x =
     boolToInt (x % 2 = 0)
 
@@ -344,6 +357,10 @@ module Program =
     foo checker1
 
     foo checker2
+
+    foo dup
+
+    //foo checker3
 
     //printfn "Cast 'true' as int: %d" (boolToInt true)
     //printfn "Cast 'false' as int: %d" (boolToInt false)

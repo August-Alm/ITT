@@ -8,6 +8,8 @@ module Terms =
   open System
   open Type
 
+  module Port =
+    let show net port = $"{kind net (Port.address port)}:{Port.slot port}"
 
   [<AbstractClass; AllowNullLiteral>]
   type Term () = class end
@@ -60,7 +62,7 @@ module Terms =
   //⇓ ⇒ ← →
   let rec show (trm : Term) =
     match trm with
-    | null -> failwith "null term"
+    | null -> "<null>"//failwith "null term"
     | :? Nil -> "⊥"
     | :? Var as var -> var.Name
     | :? Lam as lam -> $"λ{lam.Name}.{show lam.Body}"
@@ -128,16 +130,18 @@ module Terms =
     for x, port in vars do
       match scope.TryGetValue x with
       | true, next ->
+        //printfn "%s: %s -- %s" x (Port.show net port) (Port.show net next)
         if enter net next <> next then
           failwith $"Variable {x} is bound more than once."
         link net port next
       | false, _ -> failwith $"Variable {x} is not bound."
     for KeyValue (_, port) in scope do
       if enter net port = port then
+        //printfn "adding FRE to %A"(kind net (Port.address port))
         let fre = mkNode net FRE
         link net (Port.mk fre 1) (Port.mk fre 2)
         link net (Port.mk fre 0) port
-    link net host main
+    if host <> main then link net host main
   
   let build (term : Term) =
     let net = Net ()
@@ -185,15 +189,7 @@ module Terms =
       let port = enter net (Port.mk node slot)
       match vars.TryGetValue port with
       | true, name -> (Var name) :> Term
-      | false, _ ->
-        try
-          trms[Port.address port]
-        with
-        | e ->
-          printfn "looking for %d" (Port.address port)
-          for KeyValue (k, trm) in trms do
-            printfn "%d: %A" k trm
-          raise e
+      | false, _ -> trms[Port.address port]
     match kind net node with
     | ROOT -> failwith "cannot connect root node"
     | NIL -> ()
@@ -236,7 +232,13 @@ module Terms =
       trms.Add (node, trm)
     for node in nodes do
       connect net vars trms fres dups node
-    let mutable res = trms[getFirst net]
+    //for KeyValue (k, trm) in trms do
+    //  printfn "%d: %s" k (show trm)
+    let mutable res =
+      let port = enter net (Port.mk (getRoot net) 0)
+      let first = Port.address port
+      if kind net first <> Kind.DUP then trms[first]
+      else Var (vars[port])
     for dup in dups do
       dup.Body <- res
       res <- dup
@@ -244,6 +246,7 @@ module Terms =
       fre.Body <- res
       res <- fre
     res
+      
   
   let roundtrip (term : Term) =
     readback (build term)

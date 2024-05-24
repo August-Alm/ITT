@@ -112,15 +112,12 @@ module Nets =
     let inline enter (net : Net) (port : Port) : Port =
       LanguagePrimitives.Int32WithMeasure net.Nodes[int port]
   
-    let getFirst net =
-      Port.address (enter net (Port.mk (getRoot net) 0))
-      //while addr < net.Nodes.Count / 4 && net.Reuse.Contains addr do
-      //  addr <- Port.address (enter net (Port.mk addr 0))
-      //addr
-
     let kind (net : Net) (node : int) =
       Kind.fromInt (net.Nodes[int <| Port.mk node 3])
   
+    let getFirst net =
+      Port.address (enter net (Port.mk (getRoot net) 0))
+
     let getType (net : Net) (node : int) =
       match kind net node with
       |  Kind.ANN | Kind.CHK -> net.Types[net.Nodes[int <| Port.mk node 2]]
@@ -252,14 +249,14 @@ module Nets =
       let lam2 = mkNode net LAM
       let sup' = mkNode net SUP
       let dup' = mkNode net DUP
-      link net (Port.mk lam1 0) (enter net (Port.mk dup 2))
-      link net (Port.mk lam1 1) (Port.mk dup' 2)
-      link net (Port.mk lam1 2) (Port.mk sup' 2)
-      link net (Port.mk lam2 0) (enter net (Port.mk dup 1))
-      link net (Port.mk lam2 1) (Port.mk dup' 1)
-      link net (Port.mk lam2 2) (Port.mk sup' 1)
-      link net (Port.mk dup' 0) (enter net (Port.mk lam 1))
-      link net (Port.mk sup' 0) (enter net (Port.mk lam 2))
+      link net (Port.mk lam1 0) (enter net (Port.mk dup 1))
+      link net (Port.mk lam1 1) (Port.mk sup' 1)
+      link net (Port.mk lam1 2) (Port.mk dup' 1)
+      link net (Port.mk lam2 0) (enter net (Port.mk dup 2))
+      link net (Port.mk lam2 1) (Port.mk sup' 2)
+      link net (Port.mk lam2 2) (Port.mk dup' 2)
+      link net (Port.mk dup' 0) (enter net (Port.mk lam 2))
+      link net (Port.mk sup' 0) (enter net (Port.mk lam 1))
       freeNode net lam
       freeNode net dup
     
@@ -419,7 +416,6 @@ module Nets =
       | Kind.DUP, Kind.ANN -> interact_ANN_DUP net nd2 nd1
       | Kind.ANN, Kind.CHK -> interact_ANN_CHK net nd1 nd2
       | Kind.CHK, Kind.ANN -> interact_ANN_CHK net nd2 nd1
-      | Kind.ROOT, _ | _, Kind.ROOT -> ()
       | k1, k2 -> failwith $"invalid interaction: {k1} {k2}"
     
     let reduce (net : Net) =
