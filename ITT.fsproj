@@ -6,13 +6,11 @@
   <ItemGroup>
     <Compile Include="Utils.fs" />
     <Compile Include="Type.fs" />
-    <Compile Include="Stacks.fs" />
     <Compile Include="Deque.fs" />
     <Compile Include="Nets.fsi" />
     <Compile Include="Nets.fs" />
     <Compile Include="Terms.fsi" />
     <Compile Include="Terms.fs" />
-    <Compile Include="InteractionTypeTheory.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 </Project>
