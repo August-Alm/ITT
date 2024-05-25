@@ -44,6 +44,11 @@ module Program =
   let y =
     Dup ("f1", "f2", Var "f", Lam ("f", App (Var "f1", Var "f2")))
   
+  let checker4 =
+    let e = Arrow (Unit, Unit)
+    let t = Arrow (Box e, e)
+    Chk (y, t)
+  
 
   [<EntryPoint>]
   let main _ =
@@ -87,6 +92,8 @@ module Program =
     foo checker3
 
     foo y
+
+    foo checker4
 
     foo (App (y, idlam))
 

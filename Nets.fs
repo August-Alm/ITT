@@ -346,7 +346,7 @@ module Nets =
         freeNode net ann
         freeNode net chk
       else
-        failwith "type mismatch"
+        failwith $"type mismatch: {Type.show s} is not a subtype of {Type.show t}"
 
     let interact (net : Net) nd1 nd2 =
       net.Rewrites <- net.Rewrites + 1
