@@ -16,7 +16,7 @@ module Program =
     let bod = App (Var "s1", App (Var "s2", Var "z"))
     Lam ("s", Lam ("z", Dup ("s1", "s2", Var "s", bod)))
   
-  let idlam = Lam ("x", Var "x")
+  let idlam = Lam ("t", Var "t")
 
   let idapp = App (idlam, Lam ("y", Var "y"))
 
@@ -42,7 +42,7 @@ module Program =
     Chk (church2, Box t)
   
   let y =
-    Dup ("f1", "f2", Var "f", Lam ("f", App (Var "f1", Var "f2")))
+    Lam ("f", Dup ("fx", "x", App (Var "f", Var "x"), Var "fx"))
   
 
   [<EntryPoint>]
