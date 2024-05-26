@@ -227,7 +227,7 @@ module Nets =
       freeNode net lam
       freeNode net dup
     
-    let private interact_3_CHK net (nd : int) (chk : int) (typ : Type) =
+    let private interact_box_CHK net (nd : int) (chk : int) (typ : Type) =
       let nd' = mkNode net (kind net nd)
       let chk1 = mkChkNode net typ
       let chk2 = mkChkNode net typ
@@ -244,8 +244,8 @@ module Nets =
       freeNode net chk
     
     let interact_LAM_CHK net (lam : int) (chk : int) =
-      match Type.reduce (getType net chk) with
-      | Box t -> interact_3_CHK net lam chk t
+      match getType net chk with
+      | Bang t -> interact_box_CHK net lam chk t
       | Arrow (s, a) ->
         let chk' = mkChkNode net a
         let ann' = mkAnnNode net s
@@ -290,7 +290,6 @@ module Nets =
     
     let interact_SUP_CHK net (sup : int) (chk : int) =
       match getType net chk with
-      | Box t -> interact_3_CHK net sup chk t
       | Tuple (a, b) ->
         let chk1 = mkChkNode net a
         let chk2 = mkChkNode net b
@@ -309,8 +308,8 @@ module Nets =
       freeNode net ann
 
     let interact_ANN_APP net (ann : int) (app : int) =
-      match Type.reduce (getType net ann) with
-      | Box (Arrow (s, t)) | Arrow (s, t) ->
+      match getType net ann with
+      | Bang (Arrow (s, t)) | Arrow (s, t) ->
         let ann' = mkAnnNode net t
         let chk' = mkChkNode net s
         let app' = mkNode net Kind.APP
@@ -325,7 +324,7 @@ module Nets =
 
     let interact_ANN_DUP net (ann : int) (dup : int) =
       match getType net ann with
-      | Box _ as typ ->
+      | Bang _ as typ ->
         let ann1 = mkAnnNode net typ
         let ann2 = mkAnnNode net typ
         let dup' = mkNode net Kind.DUP

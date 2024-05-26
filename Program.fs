@@ -24,11 +24,11 @@ module Program =
 
   let vanishing = Fre (idlam, Nil ())
 
-  let checker1 = Chk (idlam, Arrow (Unit, Unit))
+  let checker1 = Chk (idlam, hom Unit Unit)
 
   let checker2 =
-    let e = Arrow (Unit, Unit)
-    let t = Arrow (Box e, e)
+    let e = hom Unit Unit
+    let t = hom (bang e) e
     Chk (church2, t)
 
   let dup =
@@ -37,16 +37,16 @@ module Program =
     Fre (Var "f1", Dup ("s1", "s2", Var "s", Dup ("f1", "f2", lam, Var "f2")))
 
   let checker3 =
-    let e = Box (Arrow (Unit, Unit))
-    let t = Arrow (e, Arrow (Unit, Unit))
-    Chk (church2, Box t)
+    let e = hom Unit Unit
+    let t = hom (bang e) e
+    Chk (church2, bang t)
   
   let y =
     Lam ("f", Dup ("fx", "x", App (Var "f", Var "x"), Var "fx"))
   
   let checker4 =
-    let e = Arrow (Unit, Unit)
-    let t = Arrow (Box e, e)
+    let e = hom Unit Unit
+    let t = hom (bang e) e
     Chk (y, t)
   
 
