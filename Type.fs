@@ -6,14 +6,14 @@ module Type =
     | TUnit
     | TTuple of Type * Type
     | TArrow of Type * Type
-    | TBox of Type 
+    | TBang of Type 
   
   let (|Unit|Tuple|Arrow|Bang|) (typ : Type) =
     match typ with
     | TUnit -> Unit
     | TTuple (a, b) -> Tuple (a, b)
     | TArrow (a, b) -> Arrow (a, b)
-    | TBox t -> Bang t 
+    | TBang t -> Bang t 
     
   let Unit = TUnit
 
@@ -23,17 +23,17 @@ module Type =
 
   let rec bang (typ : Type) =
     match typ with
-    | TBox _ -> typ
-    | TTuple (a, b) -> TTuple (bang (TBox a), bang (TBox b))
-    | _ -> TBox typ
+    | TBang _ -> typ
+    | TTuple (a, b) -> TTuple (bang a, bang b)
+    | _ -> TBang typ
 
   [<RequireQualifiedAccess>]
   module Type =
 
     let rec reduce (typ : Type) =
       match typ with
-      | TBox (TBox t) -> reduce (TBox t) 
-      | TBox (TTuple (s, t)) -> reduce (TTuple (TBox s, TBox t))
+      | TBang (TBang t) -> reduce (TBang t) 
+      | TBang (TTuple (s, t)) -> reduce (TTuple (TBang s, TBang t))
       | _ -> typ
     
     let rec show (typ : Type) =
@@ -41,14 +41,14 @@ module Type =
       | TUnit -> "U"
       | TTuple (s, t) -> $"({show s} ⊗ {show t})"
       | TArrow (s, t) -> $"({show s} ⇒ {show t})"
-      | TBox t -> $"!{show t}"
+      | TBang t -> $"!{show t}"
     
     let rec isSubtype (typ1 : Type) (typ2 : Type) =
       match typ1, typ2 with
       | TUnit, TUnit -> true
       | TTuple (s1, t1), TTuple (s2, t2) -> isSubtype s1 s2 && isSubtype t1 t2
       | TArrow (s1, t1), TArrow (s2, t2) -> isSubtype s2 s1 && isSubtype t1 t2
-      | TBox t1, TBox t2 -> isSubtype t1 t2
-      | TBox t1, _ -> isSubtype t1 typ2
+      | TBang t1, TBang t2 -> isSubtype t1 t2
+      | TBang t1, _ -> isSubtype t1 typ2
       | _ -> false
     
