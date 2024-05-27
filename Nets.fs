@@ -245,7 +245,7 @@ module Nets =
     
     let interact_LAM_CHK net (lam : int) (chk : int) =
       match getType net chk with
-      | Bang t -> interact_box_CHK net lam chk t
+      | BangedArrow (s, a) -> interact_box_CHK net lam chk (Arrow (s, a))
       | Arrow (s, a) ->
         let chk' = mkChkNode net a
         let ann' = mkAnnNode net s
@@ -309,7 +309,7 @@ module Nets =
 
     let interact_ANN_APP net (ann : int) (app : int) =
       match getType net ann with
-      | Bang (Arrow (s, t)) | Arrow (s, t) ->
+      | BangedArrow (s, t) | Arrow (s, t) ->
         let ann' = mkAnnNode net t
         let chk' = mkChkNode net s
         let app' = mkNode net Kind.APP
@@ -324,7 +324,7 @@ module Nets =
 
     let interact_ANN_DUP net (ann : int) (dup : int) =
       match getType net ann with
-      | Bang _ as typ ->
+      | BangedArrow _ as typ ->
         let ann1 = mkAnnNode net typ
         let ann2 = mkAnnNode net typ
         let dup' = mkNode net Kind.DUP
