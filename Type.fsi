@@ -2,10 +2,11 @@ namespace ITT
 
 module Type =
 
-  [<Sealed>]
-  type Type
-
-  val (|Unit|Tuple|Arrow|Bang|) : Type -> Choice<unit, Type * Type, Type * Type, Type>
+  type Type =
+    | Unit
+    | Tuple of Type * Type
+    | Arrow of Type * Type
+    | BangedArrow of Type * Type 
 
   val Unit : Type
 
@@ -15,7 +16,8 @@ module Type =
   // Constructor of tuple (tensor) types.
   val tup : Type -> Type -> Type
 
-  /// The bang `!` is idempotent and distributes over the tensor tuple `⊗`.
+  /// The bang `!` is idempotent, distributes over the tensor tuple `⊗`, and is the
+  /// identity on the `Unit` type.
   val bang : Type -> Type
 
   [<RequireQualifiedAccess>]
