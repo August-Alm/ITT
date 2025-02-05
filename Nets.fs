@@ -4,7 +4,6 @@ module Nets =
 
   open System.Collections.Generic
   open LanguagePrimitives
-  open Type
 
   type Kind =
     | ROOT = 0
@@ -12,10 +11,11 @@ module Nets =
     | LAM = 2
     | APP = 3
     | SUP = 4
-    | ANN = 5
+    | THE = 5
     | CHK = 6
     | FRE = 7
     | DUP = 8
+    | UNI = 9
   
   [<RequireQualifiedAccess>]
   module Kind =
@@ -44,13 +44,11 @@ module Nets =
   
   type Net () =
     let nodes = ResizeArray<int> 512
-    let types = ResizeArray<Type> 128
     let reuse = Reuse ()
     let redices = Stack<struct (int * int)> 512
     let mutable rewrites = 0
     do nodes.AddRange [| 2; 1; 0; 0 |]
     member _.Nodes = nodes
-    member _.Types = types
     member _.Reuse = reuse
     member _.Redices = redices
     member _.Rewrites with get () = rewrites and set v = rewrites <- v
@@ -95,11 +93,6 @@ module Nets =
     let inline private set (net : Net) (portA : Port) (portB : Port) =
       net.Nodes[int portA] <- int portB
 
-    let getType (net : Net) (node : int) =
-      match kind net node with
-      | Kind.ANN | Kind.CHK -> net.Types[net.Nodes[int (Port.mk node 2)]]
-      | _ -> failwith "only ANN and CHK nodes have a type"
-  
     let link (net : Net) (portA : Port) (portB : Port) =
       set net portA portB; set net portB portA
       let addrA = Port.address portA
@@ -130,46 +123,6 @@ module Nets =
         net.Nodes.Add (Kind.toInt kind)
         addr
   
-    let mkChkNode (net : Net) (typ : Type) =
-      match net.Reuse.TryPop () with
-      | true, addr -> 
-        set net (Port.mk addr 0) (Port.mk addr 0)
-        set net (Port.mk addr 1) (Port.mk addr 1)
-        set net (Port.mk addr 2) (Int32WithMeasure net.Types.Count)
-        set net (Port.mk addr 3) (Int32WithMeasure (Kind.toInt Kind.CHK))
-        net.Types.Add typ
-        addr
-      | false, _ ->
-        let len = net.Nodes.Count
-        net.Nodes.EnsureCapacity (len + 4) |> ignore
-        let addr = len / 4
-        net.Nodes.Add (int (Port.mk addr 0))
-        net.Nodes.Add (int (Port.mk addr 1))
-        net.Nodes.Add (net.Types.Count)
-        net.Types.Add typ
-        net.Nodes.Add (Kind.toInt Kind.CHK)
-        addr
-  
-    let mkAnnNode (net : Net) (typ : Type) =
-      match net.Reuse.TryPop () with
-      | true, addr -> 
-        set net (Port.mk addr 0) (Port.mk addr 0)
-        set net (Port.mk addr 1) (Port.mk addr 1)
-        set net (Port.mk addr 2) (Int32WithMeasure net.Types.Count)
-        set net (Port.mk addr 3) (Int32WithMeasure (Kind.toInt Kind.ANN))
-        net.Types.Add typ
-        addr
-      | false, _ ->
-        let len = net.Nodes.Count
-        net.Nodes.EnsureCapacity (len + 4) |> ignore
-        let addr = len / 4
-        net.Nodes.Add (int (Port.mk addr 0))
-        net.Nodes.Add (int (Port.mk addr 1))
-        net.Nodes.Add (net.Types.Count)
-        net.Types.Add typ
-        net.Nodes.Add (Kind.toInt Kind.ANN)
-        addr
-
     let inline freeNode (net : Net) nd =
       net.Reuse.Push nd
 
@@ -227,38 +180,6 @@ module Nets =
       freeNode net lam
       freeNode net dup
     
-    let private interact_box_CHK net (nd : int) (chk : int) (typ : Type) =
-      let nd' = mkNode net (kind net nd)
-      let chk1 = mkChkNode net typ
-      let chk2 = mkChkNode net typ
-      let dup = mkNode net Kind.DUP
-      let fre = mkNode net Kind.FRE
-      link net (Port.mk nd' 0) (Port.mk chk1 0)
-      link net (Port.mk nd' 1) (enter net (Port.mk nd 1))
-      link net (Port.mk nd' 2) (enter net (Port.mk nd 2))
-      link net (Port.mk chk1 1) (Port.mk dup 0)
-      link net (Port.mk dup 1) (Port.mk fre 0)
-      link net (Port.mk dup 2) (Port.mk chk2 0)
-      link net (Port.mk chk2 1) (enter net (Port.mk nd 0))
-      freeNode net nd
-      freeNode net chk
-    
-    let interact_LAM_CHK net (lam : int) (chk : int) =
-      match getType net chk with
-      | Bang t -> interact_box_CHK net lam chk t
-      | Arrow (s, a) ->
-        let chk' = mkChkNode net a
-        let ann' = mkAnnNode net s
-        let lam' = mkNode net Kind.LAM
-        link net (Port.mk lam' 0) (enter net (Port.mk chk 1))
-        link net (Port.mk lam' 1) (Port.mk ann' 1)
-        link net (Port.mk lam' 2) (Port.mk chk' 1)
-        link net (Port.mk ann' 0) (enter net (Port.mk lam 1))
-        link net (Port.mk chk' 0) (enter net (Port.mk lam 2))
-        freeNode net lam
-        freeNode net chk
-      | _ -> failwith "cannot check lambda against non-arrow type"
-    
     let interact_SUP_FRE net (sup : int) (fre : int) =
       let fre1 = fre
       let fre2 = mkNode net Kind.FRE
@@ -289,63 +210,52 @@ module Nets =
       freeNode net dup
     
     let interact_SUP_CHK net (sup : int) (chk : int) =
-      match getType net chk with
-      | Tuple (a, b) ->
-        let chk1 = mkChkNode net a
-        let chk2 = mkChkNode net b
-        let sup' = mkNode net Kind.SUP
-        link net (Port.mk sup' 0) (enter net (Port.mk chk 1))
-        link net (Port.mk sup' 1) (Port.mk chk1 1)
-        link net (Port.mk sup' 2) (Port.mk chk2 1)
-        link net (Port.mk chk1 0) (enter net (Port.mk sup 1))
-        link net (Port.mk chk2 0) (enter net (Port.mk sup 2))
-        freeNode net sup
-        freeNode net chk
-      | _ -> failwith "cannot check tensor against non-tensor type"
+      let chk1 = mkNode net Kind.CHK
+      let chk2 = mkNode net Kind.CHK
+      let sup' = mkNode net Kind.SUP
+      let dup' = mkNode net Kind.DUP
+      link net (Port.mk dup' 0) (enter net (Port.mk chk 2))
+      link net (Port.mk dup' 1) (Port.mk chk1 2)
+      link net (Port.mk dup' 2) (Port.mk chk2 2)
+      link net (Port.mk sup' 0) (enter net (Port.mk chk 1))
+      link net (Port.mk sup' 1) (Port.mk chk1 1)
+      link net (Port.mk sup' 2) (Port.mk chk2 1)
+      link net (Port.mk chk1 0) (enter net (Port.mk sup 1))
+      link net (Port.mk chk2 0) (enter net (Port.mk sup 2))
+      freeNode net sup
+      freeNode net chk
     
-    let interact_ANN_FRE net (ann : int) (fre : int) =
-      link net (Port.mk fre 0) (enter net (Port.mk ann 1))
-      freeNode net ann
+    let interact_THE_FRE net (the : int) (fre : int) =
+      let nil = mkNode net Kind.NIL
+      link net (Port.mk fre 0) (enter net (Port.mk the 2))
+      link net (Port.mk nil 0) (enter net (Port.mk the 1))
+      freeNode net the
+    
+    let interact_THE_CHK net (the : int) (chk : int) =
+      link net (enter net (Port.mk chk 2)) (enter net (Port.mk the 1))
+      link net (enter net (Port.mk chk 1)) (enter net (Port.mk the 2))
+      freeNode net the
+      freeNode net chk
 
-    let interact_ANN_APP net (ann : int) (app : int) =
-      match getType net ann with
-      | Bang (Arrow (s, t)) | Arrow (s, t) ->
-        let ann' = mkAnnNode net t
-        let chk' = mkChkNode net s
-        let app' = mkNode net Kind.APP
-        link net (Port.mk app' 0) (enter net (Port.mk ann 1))
-        link net (Port.mk app' 1) (Port.mk chk' 1)
-        link net (Port.mk app' 2) (Port.mk ann' 1)
-        link net (Port.mk chk' 0) (enter net (Port.mk app 1))
-        link net (Port.mk ann' 0) (enter net (Port.mk app 2))
-        freeNode net ann
-        freeNode net app
-      | _ -> failwith "cannot apply non-arrow type"
+    let interact_THE_DUP net (the : int) (dup : int) =
+      let the1 = mkNode net Kind.THE
+      let the2 = mkNode net Kind.THE
+      let sup' = mkNode net Kind.SUP
+      let dup' = mkNode net Kind.DUP
+      link net (Port.mk the1 0) (enter net (Port.mk dup 1))
+      link net (Port.mk the1 1) (Port.mk sup' 1)
+      link net (Port.mk the1 2) (Port.mk dup' 1)
+      link net (Port.mk the2 0) (enter net (Port.mk dup 2))
+      link net (Port.mk the2 1) (Port.mk sup' 2)
+      link net (Port.mk the2 2) (Port.mk dup' 2)
+      link net (Port.mk dup' 0) (enter net (Port.mk the 2))
+      link net (Port.mk sup' 0) (enter net (Port.mk the 1))
+      freeNode net the
+      freeNode net dup
 
-    let interact_ANN_DUP net (ann : int) (dup : int) =
-      match getType net ann with
-      | Bang _ as typ ->
-        let ann1 = mkAnnNode net typ
-        let ann2 = mkAnnNode net typ
-        let dup' = mkNode net Kind.DUP
-        link net (Port.mk dup' 0) (enter net (Port.mk ann 1))
-        link net (Port.mk dup' 1) (Port.mk ann1 1)
-        link net (Port.mk dup' 2) (Port.mk ann2 1)
-        link net (Port.mk ann1 0) (enter net (Port.mk dup 1))
-        link net (Port.mk ann2 0) (enter net (Port.mk dup 2))
-        freeNode net ann
-        freeNode net dup
-      | _ -> failwith "cannot duplicate non-box type"
-
-    let interact_ANN_CHK net (ann : int) (chk : int) =
-      let t = getType net chk
-      let s = getType net ann
-      if Type.isSubtype s t then
-        link net (enter net (Port.mk chk 1)) (enter net (Port.mk ann 1))
-        freeNode net ann
-        freeNode net chk
-      else
-        failwith $"type mismatch: {Type.show s} is not a subtype of {Type.show t}"
+    let interact_UNI_FRE net (uni : int) (fre : int) =
+      freeNode net uni
+      freeNode net fre
 
     let interact (net : Net) nd1 nd2 =
       net.Rewrites <- net.Rewrites + 1
@@ -364,8 +274,8 @@ module Nets =
       | Kind.APP, Kind.LAM -> interact_LAM_APP net nd2 nd1
       | Kind.LAM, Kind.DUP -> interact_LAM_DUP net nd1 nd2
       | Kind.DUP, Kind.LAM -> interact_LAM_DUP net nd2 nd1
-      | Kind.LAM, Kind.CHK -> interact_LAM_CHK net nd1 nd2
-      | Kind.CHK, Kind.LAM -> interact_LAM_CHK net nd2 nd1
+      | Kind.LAM, Kind.CHK -> ()
+      | Kind.CHK, Kind.LAM -> ()
       | Kind.SUP, Kind.FRE -> interact_SUP_FRE net nd1 nd2
       | Kind.FRE, Kind.SUP -> interact_SUP_FRE net nd2 nd1
       | Kind.SUP, Kind.APP -> interact_SUP_APP net nd1 nd2
@@ -374,14 +284,18 @@ module Nets =
       | Kind.DUP, Kind.SUP -> interact_SUP_DUP net nd2 nd1
       | Kind.SUP, Kind.CHK -> interact_SUP_CHK net nd1 nd2
       | Kind.CHK, Kind.SUP -> interact_SUP_CHK net nd2 nd1
-      | Kind.ANN, Kind.FRE -> interact_ANN_FRE net nd1 nd2
-      | Kind.FRE, Kind.ANN -> interact_ANN_FRE net nd2 nd1
-      | Kind.ANN, Kind.APP -> interact_ANN_APP net nd1 nd2
-      | Kind.APP, Kind.ANN -> interact_ANN_APP net nd2 nd1
-      | Kind.ANN, Kind.DUP -> interact_ANN_DUP net nd1 nd2
-      | Kind.DUP, Kind.ANN -> interact_ANN_DUP net nd2 nd1
-      | Kind.ANN, Kind.CHK -> interact_ANN_CHK net nd1 nd2
-      | Kind.CHK, Kind.ANN -> interact_ANN_CHK net nd2 nd1
+      | Kind.THE, Kind.FRE -> interact_THE_FRE net nd1 nd2
+      | Kind.FRE, Kind.THE -> interact_THE_FRE net nd2 nd1
+      | Kind.THE, Kind.DUP -> interact_THE_DUP net nd1 nd2
+      | Kind.DUP, Kind.THE -> interact_THE_DUP net nd2 nd1
+      | Kind.THE, Kind.CHK -> interact_THE_CHK net nd1 nd2
+      | Kind.CHK, Kind.THE -> interact_THE_CHK net nd2 nd1
+      | Kind.THE, Kind.APP -> ()
+      | Kind.APP, Kind.THE -> ()
+      | Kind.UNI, Kind.FRE -> interact_UNI_FRE net nd1 nd2
+      | Kind.FRE, Kind.UNI -> interact_UNI_FRE net nd2 nd1
+      | Kind.CHK, Kind.UNI -> ()
+      | Kind.UNI, Kind.CHK -> ()
       | k1, k2 -> failwith $"invalid interaction: {k1} {k2}"
     
     let reduce (net : Net) =

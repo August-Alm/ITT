@@ -3,7 +3,6 @@
 module Program =
 
   open ITT.Terms
-  open ITT.Type
   open System
   open System.Threading
   open System.Threading.Tasks
@@ -24,32 +23,25 @@ module Program =
 
   let vanishing = Fre (idlam, Nil ())
 
-  let checker1 = Chk (idlam, hom Unit Unit)
+  let polid = Fre (Var "c", Lam ("c", idlam))
 
-  let checker2 =
-    let e = hom Unit Unit
-    let t = hom (bang e) e
-    Chk (church2, t)
+  let EndF = Dup ("a1", "a2", Var "a", Lam ("a", The ("f", Lam ("x",
+    Chk (App (Var "f", Chk (Var "x", Var "a1")), Var "a2")))))
+
+  let forall =
+    Lam ("F", The ("n", Lam ("s", Dup ("s1", "s2", Var "s",
+    Chk (App (Var "n", Chk (Var "s1", Uni ())), App (Var "F", Chk (Var "s2", Uni ())))))))
+
+  let polidCheck = Chk (polid, App (forall, EndF))
 
   let dup =
     let bod = App (Var "s1", App (Var "s2", Var "z"))
     let lam = Lam ("s", Lam ("z", bod))
     Fre (Var "f1", Dup ("s1", "s2", Var "s", Dup ("f1", "f2", lam, Var "f2")))
 
-  let checker3 =
-    let e = hom Unit Unit
-    let t = hom (bang e) e
-    Chk (church2, bang t)
-  
   let y =
     Lam ("f", Dup ("fx", "x", App (Var "f", Var "x"), Var "fx"))
   
-  let checker4 =
-    let e = hom Unit Unit
-    let t = hom (bang e) e
-    Chk (y, t)
-  
-
   [<EntryPoint>]
   let main _ =
 
@@ -83,17 +75,11 @@ module Program =
 
     foo vanishing
 
-    foo checker1
-
-    foo checker2
+    foo polidCheck
 
     foo dup
 
-    foo checker3
-
     foo y
-
-    foo checker4
 
     foo (App (y, idlam))
 

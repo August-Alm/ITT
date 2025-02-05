@@ -3,8 +3,6 @@ namespace ITT
 module Terms =
 
   open Nets
-  open Type
-
 
   [<AbstractClass>]
   type Term = class end
@@ -13,6 +11,10 @@ module Terms =
     inherit Term
     new : unit -> Nil
   
+  type Uni =
+    inherit Term
+    new : unit -> Uni
+
   type Var =
     inherit Term
     member Name : string
@@ -36,17 +38,17 @@ module Terms =
     member Right : Term
     new : Term * Term -> Sup
   
-  type Ann =
+  type The =
     inherit Term
-    member Term : Term
-    member Type : Type
-    new : Term * Type -> Ann
+    member Name : string
+    member Body : Term
+    new : string * Term -> The
   
   type Chk =
     inherit Term
     member Term : Term
-    member Type : Type
-    new : Term * Type -> Chk
+    member Type : Term
+    new : Term * Term -> Chk
   
   type Fre =
     inherit Term

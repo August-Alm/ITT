@@ -6,7 +6,6 @@ module Terms =
   open Net
   open System.Collections.Generic
   open System
-  open Type
 
   module Port =
     let show net port = $"{kind net (Port.address port)}:{Port.slot port}"
@@ -18,6 +17,9 @@ module Terms =
   type Nil () =
     inherit Term ()
   
+  type Uni () =
+    inherit Term ()
+
   type Var (name) =
     inherit Term ()
     member val Name : string = name with get, set
@@ -27,6 +29,11 @@ module Terms =
     member val Name : string = name with get, set
     member val Body : Term = body with get, set
   
+  type The (name, body) =
+    inherit Term ()
+    member val Name : string = name with get, set
+    member val Body : Term = body with get, set
+
   type App (func, argm) =
     inherit Term ()
     member val Func : Term = func with get, set
@@ -45,7 +52,7 @@ module Terms =
   type Chk (trm, typ) =
     inherit Term ()
     member val Term : Term = trm with get, set
-    member val Type : Type = typ with get, set
+    member val Type : Term = typ with get, set
   
   type Fre (trm, bod) =
     inherit Term ()
@@ -65,14 +72,15 @@ module Terms =
     match trm with
     | null -> "<null>"//failwith "null term"
     | :? Nil -> "⊥"
+    | :? Uni -> "✲"
     | :? Var as var -> var.Name
     | :? Lam as lam -> $"λ{lam.Name}.{show lam.Body}"
     | :? App as app -> $"({show app.Func} {show app.Argm})"
-    | :? Sup as sup -> $"{show sup.Left} ⊗ {show sup.Right}"
-    | :? Ann as ann -> $"({show ann.Term} : {Type.show ann.Type})"
-    | :? Chk as chk -> $"({show chk.Term} ⇓ {Type.show chk.Type})"
-    | :? Fre as fre -> $"free {show fre.Term}; {show fre.Body}"
-    | :? Dup as dup -> $"{dup.Left} ⊗ {dup.Right} ← {show dup.Term}; {show dup.Body}"
+    | :? Sup as sup -> $"({show sup.Left} ⊗ {show sup.Right})"
+    | :? The as the -> $"θ{the.Name}.{show the.Body}"
+    | :? Chk as chk -> $"[{show chk.Term} ⇓ {show chk.Type}]"
+    | :? Fre as fre -> $"(free {show fre.Term}); {show fre.Body}"
+    | :? Dup as dup -> $"({dup.Left} ⊗ {dup.Right}) ← {show dup.Term}; {show dup.Body}"
     | _ -> failwith "invalid term"
 
   let rec encode net
@@ -86,6 +94,10 @@ module Terms =
       let nil = mkNode net Kind.NIL
       link net (Port.mk nil 1) (Port.mk nil 2)
       Port.mk nil 0
+    | :? Uni ->
+      let uni = mkNode net Kind.UNI
+      link net (Port.mk uni 1) (Port.mk uni 2)
+      Port.mk uni 0
     | :? Var as trm ->
       vars.Add (trm.Name, up)
       up
@@ -94,11 +106,21 @@ module Terms =
       scope.Add (trm.Name, Port.mk lam 1)
       link net (Port.mk lam 2) (go (Port.mk lam 2) trm.Body)
       Port.mk lam 0
+    | :? The as trm ->
+      let the = mkNode net Kind.THE
+      scope.Add (trm.Name, Port.mk the 1)
+      link net (Port.mk the 2) (go (Port.mk the 2) trm.Body)
+      Port.mk the 0
     | :? App as trm ->
       let app = mkNode net Kind.APP
       link net (Port.mk app 0) (go (Port.mk app 0) trm.Func)
       link net (Port.mk app 1) (go (Port.mk app 1) trm.Argm)
       Port.mk app 2
+    | :? Chk as trm ->
+      let chk = mkNode net Kind.CHK
+      link net (Port.mk chk 0) (go (Port.mk chk 0) trm.Type)
+      link net (Port.mk chk 2) (go (Port.mk chk 2) trm.Term)
+      Port.mk chk 1
     | :? Sup as trm ->
       let sup = mkNode net Kind.SUP
       link net (Port.mk sup 1) (go (Port.mk sup 1) trm.Left)
@@ -115,14 +137,6 @@ module Terms =
       link net (Port.mk fre 1) (Port.mk fre 2)
       link net (Port.mk fre 0) (go (Port.mk fre 0) trm.Term)
       go up trm.Body
-    | :? Ann as trm ->
-      let ann = mkAnnNode net trm.Type
-      link net (Port.mk ann 1) (go (Port.mk ann 1) trm.Term)
-      Port.mk ann 0
-    | :? Chk as trm ->
-      let chk = mkChkNode net trm.Type
-      link net (Port.mk chk 0) (go (Port.mk chk 0) trm.Term)
-      Port.mk chk 1
 
   let inject net (host : Port) (term : Term) =
     let scope = Dictionary<string, Port> ()
@@ -170,11 +184,12 @@ module Terms =
     match kind net node with
     | Kind.ROOT -> failwith "cannot convert root node to expression"
     | Kind.NIL -> Nil () :> Term
+    | Kind.UNI -> Uni ()
     | Kind.LAM -> Lam (getName 1, null)
+    | Kind.THE -> The (getName 1, null)
     | Kind.APP -> App (null, null)
     | Kind.SUP -> Sup (null, null)
-    | Kind.ANN -> Ann (null, Unit)
-    | Kind.CHK -> Chk (null, Unit)
+    | Kind.CHK -> Chk (null, null)
     | Kind.FRE -> Fre (null, null)
     | Kind.DUP -> Dup (getName 1, getName 2, null, null)
   
@@ -192,9 +207,13 @@ module Terms =
     match kind net node with
     | Kind.ROOT -> failwith "cannot connect root node"
     | Kind.NIL -> ()
+    | Kind.UNI -> ()
     | Kind.LAM ->
       let lam = trms[node] :?> Lam
       lam.Body <- getTerm 2
+    | Kind.THE ->
+      let the = trms[node] :?> The
+      the.Body <- getTerm 2
     | Kind.APP ->
       let app = trms[node] :?> App
       app.Func <- getTerm 0
@@ -203,14 +222,10 @@ module Terms =
       let sup = trms[node] :?> Sup
       sup.Left <- getTerm 1
       sup.Right <- getTerm 2
-    | Kind.ANN ->
-      let ann = trms[node] :?> Ann
-      ann.Term <- getTerm 1
-      ann.Type <- getType net node
     | Kind.CHK ->
       let chk = trms[node] :?> Chk
-      chk.Term <- getTerm 0
-      chk.Type <- getType net node
+      chk.Term <- getTerm 2
+      chk.Type <- getTerm 0
     | Kind.FRE ->
       let fre = trms[node] :?> Fre
       fre.Term <- getTerm 0
